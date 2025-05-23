@@ -2,14 +2,14 @@ export const PORT = process.env.PORT || 3001;
 export const CORS_ORIGIN = '*';
 export const TIMINGS = {
   WORKER_INTERVAL: 1000,
-  WAVE_INTERVAL: 10000,
+  WAVE_INTERVAL: 60000,
   COUNTDOWN_INTERVAL: 1000,
 };
 export const WORKER_TYPES = {
-  Miner: { cost: 50, output: 0.5 },
-  Digger: { cost: 200, output: 2.0 },
-  Excavator: { cost: 800, output: 6.0 },
-  Farmer: { cost: 50, output: 1.0 },
+  Miner: { cost: 50, output: 1 },
+  Digger: { cost: 200, output: 5 },
+  Excavator: { cost: 800, output: 10 },
+  Farmer: { cost: 50, output: 1 },
 };
 export const UNIT_TYPES = {
   Swordsman: { gold: 100, food: 10, hp: 30, dmg: 6, range: 40, speed: 3 },
