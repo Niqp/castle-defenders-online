@@ -1,11 +1,24 @@
-import { TIMINGS } from './config.js';
-import { EVENTS } from './events.js';
+import { TIMINGS } from '../config.js';
+import { EVENTS } from '../events.js';
 
 export class CountdownTicker {
+  tick() {
+    if (!this.gameState) return;
+    if (!this.io) return;
+    if (!this.onNextWave) return;
+    if (this.gameState.nextWaveIn > 0) {
+      this.gameState.nextWaveIn = Math.max(0, this.gameState.nextWaveIn - 1);
+      this.io.emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
+      if (this.gameState.nextWaveIn === 0 && typeof this.onNextWave === 'function') {
+        this.onNextWave();
+      }
+    }
+  }
   constructor(io, gameState, onNextWave) {
     this.io = io;
     this.gameState = gameState;
     this.intervalId = null;
+    this.timeoutIds = [];
     this.onNextWave = onNextWave;
   }
 
@@ -20,10 +33,13 @@ export class CountdownTicker {
           spawning = true;
           console.log('[CountdownTicker] Spawning new wave...');
           this.onNextWave();
-          setTimeout(() => {
+          const timeoutId = setTimeout(() => {
             spawning = false;
             console.log('[CountdownTicker] Wave spawn complete, timer reset.');
+            // Remove this timeoutId from the array after execution
+            this.timeoutIds = this.timeoutIds.filter(id => id !== timeoutId);
           }, 10); // Small delay to ensure reset
+          this.timeoutIds.push(timeoutId);
         }
       } catch (err) {
         console.error('CountdownTicker error', err);
@@ -33,5 +49,8 @@ export class CountdownTicker {
 
   stop() {
     clearInterval(this.intervalId);
+    // Clear all pending timeouts
+    this.timeoutIds.forEach(timeoutId => clearTimeout(timeoutId));
+    this.timeoutIds = [];
   }
 }

@@ -4,7 +4,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import { PORT, CORS_ORIGIN } from './config.js';
 import { EVENTS } from './events.js';
-import { RoomManager } from './RoomManager.js';
+import { RoomManager } from './services/RoomManager.js';
 
 const app = express();
 const server = http.createServer(app);

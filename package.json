@@ -2,14 +2,23 @@
   "name": "castle-defenders-online",
   "version": "0.1.0",
   "private": true,
-  "workspaces": ["client", "server"],
-  "scripts": { 
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
     "install:all": "npm install && cd client && npm install && cd ../server && npm install",
     "start:server": "npm --prefix server run dev",
     "start:client": "npm --prefix client run dev",
-    "dev": "concurrently \"npm run start:server\" \"npm run start:client\""
+    "dev": "concurrently \"npm run start:server\" \"npm run start:client\"",
+    "runServerTests": "jest" 
   },
   "devDependencies": {
-    "concurrently": "^9.0.0"
+    "@babel/core": "^7.27.3",
+    "@babel/preset-env": "^7.27.2",
+    "babel-jest": "^30.0.0-beta.3",
+    "concurrently": "^9.0.0",
+    "jest": "^29.7.0",
+    "uuid": "^11.1.0"
   }
 }
