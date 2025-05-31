@@ -1,4 +1,4 @@
-import { h } from 'preact';
+import React from 'react';
 
 export default function LobbyScreen({ playerName, lobby, onReady, ready }) {
   const allReady = lobby.players.length > 0 && 

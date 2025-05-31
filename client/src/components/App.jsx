@@ -1,5 +1,5 @@
-import { h } from 'preact';
-import { useState, useRef, useEffect } from 'preact/hooks';
+import React from 'react';
+import { useState, useRef, useEffect } from 'react';
 import WelcomeScreen from './WelcomeScreen.jsx';
 import LobbyScreen from './LobbyScreen.jsx';
 import GameScreen from './GameScreen.jsx';

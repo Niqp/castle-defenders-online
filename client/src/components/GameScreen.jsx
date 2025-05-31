@@ -1,6 +1,6 @@
-import { h } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
-import PixiCanvas from './PixiCanvas';
+import React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import PixiStage from './PixiStage';
 import io from 'socket.io-client';
 
 const ENEMY_COLORS = {
@@ -13,8 +13,7 @@ const ENEMY_COLORS = {
 function handleCastleClick() {}
 
 export default function GameScreen({ playerName, gameState, socketRef }) {
-  const pixiContainer = useRef();
-  const pixiInstance = useRef();
+
   const [gold, setGold] = useState(0);
   const [food, setFood] = useState(0);
   const [workers, setWorkers] = useState({ Miner: 0, Digger: 0, Excavator: 0 });
@@ -100,30 +99,6 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     }
   }
 
-  // PixiJS setup: modular, responsive, and new spawn logic
-  // Only create PixiCanvas when gameState/playerName changes
-  useEffect(() => {
-    if (!pixiContainer.current) return;
-    const playerNames = (gameState?.players || []).map(p => p.name);
-    // Initialize PixiJS
-    if (pixiContainer.current && !pixiInstance.current) {
-      pixiInstance.current = new PixiCanvas(pixiContainer.current, {
-        onCastleClick: handleCastleClick
-      });
-      appRef.current = pixiInstance.current;
-    }
-
-    // Ensure the canvas container is always rendered
-    // (This is handled in the JSX return at the bottom)
-
-    return () => {
-      if (pixiInstance.current) {
-        pixiInstance.current.destroy();
-        pixiInstance.current = null;
-        appRef.current = null;
-      }
-    };
-  }, [gameState, playerName]);
 
   // Smoothly animate the nextWaveIn counter between server updates
   const [animatedWaveIn, setAnimatedWaveIn] = useState(nextWaveIn);
@@ -143,97 +118,8 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     return () => raf && cancelAnimationFrame(raf);
   }, [nextWaveIn]);
 
-  // Animation loop: interpolate enemies from previous to new server positions, units are not interpolated
-  useEffect(() => {
-    if (!pixiInstance.current) return;
-    let running = true;
-    let animationFrame;
-    function lerp(a, b, t) { return a + (b - a) * t; }
-    function interpolateEnemies(prevList, currList, t) {
-      return currList.map(curr => {
-        const prev = prevList.find(p => p.id === curr.id);
-        if (prev) {
-          return { ...curr, x: lerp(prev.x, curr.x, t), y: lerp(prev.y, curr.y, t) };
-        } else {
-          return { ...curr };
-        }
-      });
-    }
-    function animate() {
-      if (!running) return;
-      const now = Date.now();
-      const dt = now - lastUpdateRef.current;
-      const t = Math.max(0, Math.min(1, dt / SERVER_TICK_MS));
-      const interpEnemies = interpolateEnemies(prevEnemiesRef.current, enemies, t);
-      pixiInstance.current.renderObjects({ enemies: interpEnemies, units });
-      animationFrame = requestAnimationFrame(animate);
-    }
-    animate();
-    return () => {
-      running = false;
-      cancelAnimationFrame(animationFrame);
-    };
-  }, [enemies, units]);
-
-  // Update enemies/units on state change
-  // Interpolated rendering is now handled in the animation loop above
-  // useEffect(() => {
-  //   if (!pixiInstance.current) return;
-  //   pixiInstance.current.renderObjects({ enemies, units });
-  // }, [enemies, units]);
-
   // Update units when units state changes
-  // Fix: Ensure appRef exists and is assigned PixiCanvas instance
-  const appRef = useRef(null);
-
-  useEffect(() => {
-    if (!appRef.current) return;
-    const app = appRef.current;
-    if (!app.unitContainer || !app.unitSprites) return;
-    const unitContainer = app.unitContainer;
-    const unitSprites = app.unitSprites;
-    // Remove old sprites
-    for (const id in unitSprites) {
-      if (!units.find(u => u.id === id)) {
-        unitContainer.removeChild(unitSprites[id]);
-        unitSprites[id].destroy();
-        delete unitSprites[id];
-      }
-    }
-    // Add/update sprites
-    for (const unit of units) {
-      let sprite = unitSprites[unit.id];
-      if (!sprite) {
-        sprite = new PIXI.Graphics();
-        // Color by type
-        let color = 0xdddddd;
-        if (unit.type === 'Swordsman') color = 0xaaaaaa;
-        if (unit.type === 'Archer') color = 0x44bbee;
-        if (unit.type === 'Knight') color = 0xeecc44;
-        sprite.beginFill(color);
-        sprite.drawRect(-12, -18, 24, 36);
-        sprite.endFill();
-        unitContainer.addChild(sprite);
-        unitSprites[unit.id] = sprite;
-        // HP bar
-        sprite.hpBar = new PIXI.Graphics();
-        sprite.addChild(sprite.hpBar);
-      }
-      // Always update position and type
-      sprite._unitData = unit;
-      sprite.x = unit.x;
-      sprite.y = unit.y;
-      // Draw HP bar
-      const hpPerc = Math.max(0, unit.hp / (unit.maxHp || 30));
-      sprite.hpBar.clear();
-      sprite.hpBar.beginFill(0xff0000);
-      sprite.hpBar.drawRect(-12, -30, 24, 6);
-      sprite.hpBar.endFill();
-      sprite.hpBar.beginFill(0x00ff00);
-      sprite.hpBar.drawRect(-12, -30, 24 * hpPerc, 6);
-      sprite.hpBar.endFill();
-    }
-  }, [units]);
+  
 
   // Mine gold handler
   function handleMine() {
@@ -269,10 +155,14 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
           <div>{castleHp}</div>
         </div>
       </div>
-      
       <div className="game-content">
-        <div ref={pixiContainer} className="game-canvas"></div>
-        
+        <div className="game-canvas-container">
+          <PixiStage
+            enemies={enemies}
+            units={units}
+            playerNames={(gameState?.players || []).map(p => p.name)}
+          />
+        </div>
         <div className="game-sidebar">
           <div className="sidebar-section">
             <h3>Resources</h3>
@@ -284,7 +174,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <div className="action-description">Click to mine gold manually</div>
             </button>
           </div>
-          
+
           <div className="sidebar-section">
             <h3>Workers</h3>
             <div className="action-buttons">

@@ -1,6 +1,7 @@
-import { h, render } from 'preact';
-import { useState } from 'preact/hooks';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './components/App.jsx';
 import './style.css';
 
-render(<App />, document.getElementById('app'));
+const root = createRoot(document.getElementById('app'));
+root.render(<App />);
