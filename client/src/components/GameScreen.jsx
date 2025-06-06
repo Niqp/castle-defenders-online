@@ -1,82 +1,74 @@
-import React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PixiStage from './PixiStage';
-import io from 'socket.io-client';
+// Removed 'io' import as socketRef is passed as a prop
 
+// ENEMY_COLORS might be used by PixiStage or game logic, keeping it for now.
 const ENEMY_COLORS = {
   goblin: 0x44ee44,
   orc: 0x888888,
   troll: 0x9966cc
 };
 
-// Fix: Provide a no-op handler for castle click if not needed
-function handleCastleClick() {}
-
 export default function GameScreen({ playerName, gameState, socketRef }) {
+  const [gold, setGold] = useState(gameState?.gold ?? 0);
+  const [food, setFood] = useState(gameState?.food ?? 0);
+  const [workers, setWorkers] = useState(gameState?.workers ?? { Miner: 0, Digger: 0, Excavator: 0 });
+  const [playerUnits, setPlayerUnits] = useState(gameState?.playerUnits ?? { Swordsman: 0, Archer: 0, Knight: 0 });
+  const [enemies, setEnemies] = useState(gameState?.enemies ?? []);
+  const [units, setUnits] = useState(gameState?.units ?? []); // Assuming units are player-controlled units on the map
 
-  const [gold, setGold] = useState(0);
-  const [food, setFood] = useState(0);
-  const [workers, setWorkers] = useState({ Miner: 0, Digger: 0, Excavator: 0 });
-  const [playerUnits, setPlayerUnits] = useState({ Swordsman: 0, Archer: 0, Knight: 0 });
-  const [enemies, setEnemies] = useState([]);
-  const [units, setUnits] = useState([]);
-
-  // For interpolation
-  const prevEnemiesRef = useRef([]);
-  const prevUnitsRef = useRef([]);
+  const prevEnemiesRef = useRef(gameState?.enemies ?? []);
   const lastUpdateRef = useRef(Date.now());
-  const SERVER_TICK_MS = 1000; // Matches TIMINGS.COUNTDOWN_INTERVAL on server
-
-  // Only update prevEnemiesRef when new server data arrives (see socket.on('spawnEnemies'))
-  // (No effect here: handled in event handler for correct interpolation)
-  // Units do not interpolate, so prevUnitsRef is not needed for animation.
-
 
   const [wave, setWave] = useState(gameState?.wave ?? 1);
-  const [nextWaveIn, setNextWaveIn] = useState(gameState?.nextWaveIn ?? 10);
+  const [nextWaveIn, setNextWaveIn] = useState(gameState?.nextWaveIn ?? 60); // Default to 60s
   const lastWaveUpdateRef = useRef(Date.now());
-  const lastWaveValueRef = useRef(nextWaveIn);
+  const lastWaveValueRef = useRef(gameState?.nextWaveIn ?? 60);
   const [castleHp, setCastleHp] = useState(gameState?.castleHp ?? 1000);
+  const MAX_CASTLE_HP = 1000; // Define max HP for progress bar calculation
 
-  // Only use gameState for initial state, not for ongoing updates
-  // (No effect here: all updates handled by socket events)
-
-  // Setup socket for mining, resource/unit/wave, and enemy updates
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
-    console.log('GameScreen using socket id:', socket.id);
 
-    // Interpolation: update prev state and timestamp on new data
     socket.on('resourceUpdate', (data) => {
       if (data) {
         if (data.gold !== undefined) setGold(data.gold);
         if (data.food !== undefined) setFood(data.food);
-        if (data.workers) setWorkers(data.workers);
+        if (data.workers) setWorkers(prev => ({...prev, ...data.workers}));
       }
     });
     socket.on('unitUpdate', (data) => {
-      if (data && data.units) setPlayerUnits(data.units);
+      if (data && data.units) setPlayerUnits(prev => ({...prev, ...data.units}));
     });
     socket.on('stateUpdate', (data) => {
       if (data.wave !== undefined) setWave(data.wave);
-      if (data.nextWaveIn !== undefined) setNextWaveIn(data.nextWaveIn);
+      if (data.nextWaveIn !== undefined) {
+        setNextWaveIn(data.nextWaveIn);
+        lastWaveValueRef.current = data.nextWaveIn; // Ensure animation resets correctly
+        lastWaveUpdateRef.current = Date.now();
+      }
       if (data.castleHp !== undefined) setCastleHp(data.castleHp);
     });
     socket.on('spawnEnemies', (data) => {
       if (data && Array.isArray(data.enemies)) {
-        prevEnemiesRef.current = enemies;
+        prevEnemiesRef.current = enemies; // For interpolation if PixiStage uses it
         lastUpdateRef.current = Date.now();
         setEnemies(data.enemies);
       }
     });
     socket.on('spawnUnits', (data) => {
+      // Assuming 'units' are player units on the map, distinct from 'playerUnits' (counts)
       if (data && Array.isArray(data.units)) {
-        prevUnitsRef.current = units;
-        lastUpdateRef.current = Date.now();
+        // prevUnitsRef.current = units; // If interpolation is needed for these units
+        // lastUpdateRef.current = Date.now();
         setUnits(data.units);
       }
     });
+
+    // Initial fetch of full state if needed, or rely on gameState prop
+    // socket.emit('requestInitialGameState'); // Example: if you need to fetch fresh state
+
     return () => {
       socket.off('resourceUpdate');
       socket.off('unitUpdate');
@@ -84,186 +76,195 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       socket.off('spawnEnemies');
       socket.off('spawnUnits');
     };
+  }, [socketRef, enemies]); // Added enemies to ref for prevEnemiesRef.current logic
 
-  }, []);
-
-  // Worker/unit/upgrade button handlers
   function handleHireWorker(type) {
-    if (socketRef.current) {
-      socketRef.current.emit('hireWorker', type);
-    }
+    socketRef.current?.emit('hireWorker', type);
   }
   function handleSpawnUnit(type) {
-    if (socketRef.current) {
-      socketRef.current.emit('spawnUnit', type);
-    }
+    socketRef.current?.emit('spawnUnit', type);
+  }
+  function handleMine() {
+    socketRef.current?.emit('mine');
   }
 
-
-  // Smoothly animate the nextWaveIn counter between server updates
   const [animatedWaveIn, setAnimatedWaveIn] = useState(nextWaveIn);
   useEffect(() => {
-    lastWaveUpdateRef.current = Date.now();
-    lastWaveValueRef.current = nextWaveIn;
-    setAnimatedWaveIn(nextWaveIn);
-    let raf;
-    function animate() {
-      const now = Date.now();
-      const dt = (now - lastWaveUpdateRef.current) / 1000;
-      const est = Math.max(0, lastWaveValueRef.current - dt);
-      setAnimatedWaveIn(est);
-      if (est > 0) raf = requestAnimationFrame(animate);
-    }
-    animate();
-    return () => raf && cancelAnimationFrame(raf);
+    setAnimatedWaveIn(nextWaveIn); // Initialize with current nextWaveIn
+    let rafId;
+    const animate = () => {
+      const timePassed = (Date.now() - lastWaveUpdateRef.current) / 1000;
+      const newAnimatedTime = Math.max(0, lastWaveValueRef.current - timePassed);
+      setAnimatedWaveIn(newAnimatedTime);
+      if (newAnimatedTime > 0) {
+        rafId = requestAnimationFrame(animate);
+      }
+    };
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
   }, [nextWaveIn]);
 
-  // Update units when units state changes
-  
+  const castleHpPercentage = Math.max(0, Math.min(100, (castleHp / MAX_CASTLE_HP) * 100));
 
-  // Mine gold handler
-  function handleMine() {
-    console.log('Mine Gold button clicked');
-    if (socketRef.current) {
-      console.log('Emitting mine event');
-      socketRef.current.emit('mine');
-    }
-  }
+  const pixiContainerRef = useRef(null);
+  const [pixiDimensions, setPixiDimensions] = useState({ width: 800, height: 450 }); // Default 16:9
+
+  const handleResize = useCallback(() => {
+    if (!pixiContainerRef.current) return;
+    const { width, height } = pixiContainerRef.current.getBoundingClientRect();
+    setPixiDimensions({ width, height });
+  }, []);
+
+  useEffect(() => {
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [handleResize]);
+
+  const workerTypes = [
+    { type: 'Miner', cost: { gold: 50 }, current: workers.Miner },
+    { type: 'Digger', cost: { gold: 200 }, current: workers.Digger },
+    { type: 'Excavator', cost: { gold: 500 }, current: workers.Excavator },
+  ];
+
+  const unitTypes = [
+    { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: playerUnits.Swordsman },
+    { type: 'Archer', cost: { gold: 150, food: 15 }, current: playerUnits.Archer },
+    { type: 'Knight', cost: { gold: 300, food: 30 }, current: playerUnits.Knight },
+  ];
 
   return (
-    <div className="game-screen">
-      <div className="game-header">
-        <div className="resources">
-          <div className="resource">
-            <div className="resource-icon">G</div>
-            <div className="resource-value">{gold}</div>
-          </div>
-          <div className="resource">
-            <div className="resource-icon">F</div>
-            <div className="resource-value">{food}</div>
+    <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-200 text-base-content">
+      {/* Header Navbar */}
+      <div className="navbar bg-base-300 shadow-lg sticky top-0 z-50 flex flex-col sm:flex-row py-2 sm:py-0">
+        <div className="navbar-start min-w-0 sm:w-auto flex flex-col items-center sm:flex-row sm:justify-start sm:items-center order-1 sm:order-none w-full sm:w-auto py-1 sm:py-0">
+          <div className="flex items-center space-x-2 sm:space-x-2 pl-0 sm:pl-4 py-1 sm:py-0">
+            <span className="font-bold text-base sm:text-lg truncate">Castle Defenders</span>
+            <div className="tooltip tooltip-bottom" data-tip="Gold">
+              <span className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-yellow-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
+                {gold}
+              </span>
+            </div>
+            <div className="tooltip tooltip-bottom" data-tip="Food">
+              <span className="flex items-center">
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5A1.5 1.5 0 0111.5 5v1.781l-.003.002-.002.002A5.5 5.5 0 006.5 11H6v2.5a1.5 1.5 0 003 0V11h2v2.5a1.5 1.5 0 003 0V11h.5a5.5 5.5 0 00-2.504-4.715L13.5 5A1.5 1.5 0 0115 3.5V2a1 1 0 00-1-1h-4a1 1 0 00-1 1v1.5zM6.5 9a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm7 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" /></svg>
+                {food}
+              </span>
+            </div>
           </div>
         </div>
-        <div className="wave-info">
-          <div>Wave: <span className="wave-number">{wave}</span></div>
-          <div>Next wave in: <span className="wave-timer">{Math.ceil(animatedWaveIn)}s</span></div>
-        </div>
-        <div className="castle-hp">
-          <div>Castle:</div>
-          <div className="hp-bar">
-            <div className="hp-fill" style={{width: `${Math.max(0, Math.min(100, (castleHp / 1000) * 100))}%`}}></div>
+        {/* Wrapper for Wave Info and Castle HP to be on the same row on mobile */}
+        <div className="order-2 sm:order-none flex flex-row flex-nowrap items-center justify-between w-full sm:contents px-2 py-1 sm:p-0">
+          {/* Navbar Center (Wave Info) */}
+          <div className="navbar-center text-center min-w-0 sm:w-auto sm:order-none">
+            <div className="text-sm">Wave: <span className="font-semibold text-accent">{wave}</span></div>
+            <div className="text-xs">Next in: <span className="font-semibold countdown">{Math.ceil(animatedWaveIn)}s</span></div>
           </div>
-          <div>{castleHp}</div>
+          {/* Navbar End (Castle HP) */}
+          <div className="navbar-end flex items-center min-w-0 sm:justify-end sm:w-auto sm:order-none sm:pr-4">
+          <div className="flex items-center space-x-2 w-full">
+            <span className="text-sm hidden sm:inline">Castle HP:</span>
+            <progress className="progress progress-error flex-grow sm:w-32" value={castleHpPercentage} max="100"></progress>
+            <span className="text-xs sm:text-sm">{castleHp}/{MAX_CASTLE_HP}</span>
+          </div>
+        </div>
         </div>
       </div>
-      <div className="game-content">
-        <div className="game-canvas-container">
-          <PixiStage
-            enemies={enemies}
-            units={units}
-            playerNames={(gameState?.players || []).map(p => p.name)}
-          />
+
+      {/* Main Content Area */}
+      <div className="flex-grow flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 gap-2 sm:gap-4">
+        {/* Game Canvas */}
+        <div className="min-h-[clamp(200px,40vh,350px)] flex-grow lg:flex-grow-0 lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-hidden flex justify-center items-center p-1 sm:p-2">
+          <div ref={pixiContainerRef} className="relative w-full max-w-full h-auto" style={{ aspectRatio: '16/9' }}>
+            <PixiStage 
+              width={pixiDimensions.width} 
+              height={pixiDimensions.height} 
+              enemies={enemies} 
+              units={units} 
+              playerNames={[playerName]} 
+            />
+          </div>
         </div>
-        <div className="game-sidebar">
-          <div className="sidebar-section">
-            <h3>Resources</h3>
-            <button 
-              className="action-button mine-button" 
-              onClick={handleMine}
-            >
-              Mine Gold
-              <div className="action-description">Click to mine gold manually</div>
-            </button>
+
+        {/* Sidebar */}
+        <div className="min-h-0 flex-grow lg:flex-grow-0 lg:w-1/3 xl:w-1/4 lg:h-full flex flex-col space-y-2 sm:space-y-4 overflow-y-auto bg-base-100 p-2 sm:p-4 rounded-lg shadow-xl scrollbar-thin scrollbar-thumb-primary scrollbar-track-base-300">
+          
+          {/* Resources Section */}
+          <div className="card bg-base-300 shadow-md compact">
+            <div className="card-body p-3 sm:p-4">
+              <h3 className="card-title text-md sm:text-lg">Resources</h3>
+              <button 
+                className="btn btn-primary btn-sm sm:btn-md w-full mt-2" 
+                onClick={handleMine}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm2 2a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm-2 5a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                Mine Gold
+              </button>
+              <p className="text-xs text-base-content/70 mt-1 text-center">Click to manually gather gold.</p>
+            </div>
           </div>
 
-          <div className="sidebar-section">
-            <h3>Workers</h3>
-            <div className="action-buttons">
-              <button 
-                className="action-button" 
-                onClick={() => handleHireWorker('Miner')}
-                disabled={gold < 50}
-              >
-                Miner
-                <div className="action-cost">50 gold</div>
-              </button>
-              <div className="worker-count">x{workers.Miner}</div>
-              
-              <button 
-                className="action-button" 
-                onClick={() => handleHireWorker('Digger')}
-                disabled={gold < 200}
-              >
-                Digger
-                <div className="action-cost">200 gold</div>
-              </button>
-              <div className="worker-count">x{workers.Digger}</div>
-              
-              <button 
-                className="action-button" 
-                onClick={() => handleHireWorker('Excavator')}
-                disabled={gold < 500}
-              >
-                Excavator
-                <div className="action-cost">500 gold</div>
-              </button>
-              <div className="worker-count">x{workers.Excavator}</div>
-            </div>
-          </div>
-          
-          <div className="sidebar-section">
-            <h3>Military Units</h3>
-            <div className="action-buttons">
-              <button 
-                className="action-button" 
-                onClick={() => handleSpawnUnit('Swordsman')}
-                disabled={gold < 100 || food < 10}
-              >
-                Swordsman
-                <div className="action-cost">100g / 10f</div>
-              </button>
-              <div className="unit-count">x{playerUnits.Swordsman}</div>
-              
-              <button 
-                className="action-button" 
-                onClick={() => handleSpawnUnit('Archer')}
-                disabled={gold < 150 || food < 15}
-              >
-                Archer
-                <div className="action-cost">150g / 15f</div>
-              </button>
-              <div className="unit-count">x{playerUnits.Archer}</div>
-              
-              <button 
-                className="action-button" 
-                onClick={() => handleSpawnUnit('Knight')}
-                disabled={gold < 300 || food < 30}
-              >
-                Knight
-                <div className="action-cost">300g / 30f</div>
-              </button>
-              <div className="unit-count">x{playerUnits.Knight}</div>
-            </div>
-          </div>
-          
-          <div className="sidebar-section">
-            <h3>Battle Info</h3>
-            <div className="battle-stats">
-              <div className="stat-row">
-                <div className="stat-label">Wave:</div>
-                <div className="stat-value">{wave}</div>
-              </div>
-              <div className="stat-row">
-                <div className="stat-label">Castle Health:</div>
-                <div className="stat-value">{castleHp}/1000</div>
-              </div>
-              <div className="stat-row">
-                <div className="stat-label">Total Units:</div>
-                <div className="stat-value">
-                  {playerUnits.Swordsman + playerUnits.Archer + playerUnits.Knight}
-                </div>
+          {/* Workers Section */}
+          <div className="card bg-base-300 shadow-md compact">
+            <div className="card-body p-3 sm:p-4">
+              <h3 className="card-title text-md sm:text-lg">Workers</h3>
+              <div className="space-y-2 mt-2">
+                {workerTypes.map(worker => (
+                  <div key={worker.type} className="flex items-center justify-between p-2 bg-base-100 rounded-md">
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">{worker.type} <span className="badge badge-neutral badge-sm">x{worker.current}</span></p>
+                      <p className="text-xs text-base-content/70">Cost: {worker.cost.gold}G</p>
+                    </div>
+                    <button 
+                      className="btn btn-secondary btn-sm" 
+                      onClick={() => handleHireWorker(worker.type)}
+                      disabled={gold < worker.cost.gold}
+                    >
+                      Hire
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
+
+          {/* Military Units Section */}
+          <div className="card bg-base-300 shadow-md compact">
+            <div className="card-body p-3 sm:p-4">
+              <h3 className="card-title text-md sm:text-lg">Military Units</h3>
+              <div className="space-y-2 mt-2">
+                {unitTypes.map(unit => (
+                  <div key={unit.type} className="flex items-center justify-between p-2 bg-base-100 rounded-md">
+                    <div>
+                      <p className="font-semibold text-sm sm:text-base">{unit.type} <span className="badge badge-neutral badge-sm">x{unit.current}</span></p>
+                      <p className="text-xs text-base-content/70">Cost: {unit.cost.gold}G / {unit.cost.food}F</p>
+                    </div>
+                    <button 
+                      className="btn btn-accent btn-sm" 
+                      onClick={() => handleSpawnUnit(unit.type)}
+                      disabled={gold < unit.cost.gold || food < unit.cost.food}
+                    >
+                      Spawn
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Battle Info Section */}
+          <div className="card bg-base-300 shadow-md compact">
+            <div className="card-body p-3 sm:p-4">
+              <h3 className="card-title text-md sm:text-lg">Battle Info</h3>
+              <div className="space-y-1 mt-2 text-sm sm:text-base">
+                <div className="flex justify-between"><span>Current Wave:</span> <span className="font-semibold text-info">{wave}</span></div>
+                <div className="flex justify-between"><span>Castle Health:</span> <span className="font-semibold text-error">{castleHp}/{MAX_CASTLE_HP}</span></div>
+                <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(playerUnits).reduce((a, b) => a + b, 0)}</span></div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
