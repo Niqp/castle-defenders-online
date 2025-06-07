@@ -86,7 +86,7 @@ export default function App() {
 
   // This div can be styled to provide the common background
   return (
-    <div className="app-container w-full h-screen bg-gray-800 text-white flex flex-col items-center justify-center">
+    <div className="app-container w-full h-screen bg-base-300 text-white flex flex-col items-center justify-center">
       {/* You can add a common header or background elements here if they are outside the routed content */}
       {/* For example: <img src="/path/to/background.jpg" className="absolute top-0 left-0 w-full h-full object-cover -z-10" /> */}
       <Routes>

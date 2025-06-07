@@ -19,7 +19,7 @@ export default function WelcomeScreen({ onJoin }) {
 
   return (
     <div data-theme="night" className="w-full flex flex-col items-center justify-center p-4 font-montserrat animate-gradient-x bg-transparent">
-      <div className="card w-full max-w-md bg-base-200 shadow-xl">
+      <div className="card w-full max-w-md bg-base-100 shadow-xl">
         <div className="card-body items-center text-center p-6 md:p-8 lg:p-10">
           <h1 className="card-title text-3xl sm:text-4xl md:text-5xl font-cinzel font-bold text-primary drop-shadow-xl mb-2 tracking-wider uppercase">
             Castle Defenders Online

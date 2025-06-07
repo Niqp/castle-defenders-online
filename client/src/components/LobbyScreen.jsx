@@ -6,7 +6,7 @@ export default function LobbyScreen({ playerName, lobby, onReady, ready }) {
 
   return (
     <div data-theme="fantasy" className="w-full flex flex-col items-center justify-center p-4 md:p-6 bg-transparent">
-      <div className="card w-full max-w-3xl bg-base-100 shadow-xl">
+      <div className="card w-full max-w-3xl bg-base-200 shadow-xl">
         <div className="card-body flex flex-col items-center w-full p-6 md:p-8">
           <h2 className="card-title text-3xl md:text-4xl font-bold text-primary mb-6 md:mb-8 text-center justify-center">
             Battle Preparation

@@ -107,19 +107,37 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const castleHpPercentage = Math.max(0, Math.min(100, (castleHp / MAX_CASTLE_HP) * 100));
 
   const pixiContainerRef = useRef(null);
-  const [pixiDimensions, setPixiDimensions] = useState({ width: 800, height: 450 }); // Default 16:9
-
-  const handleResize = useCallback(() => {
-    if (!pixiContainerRef.current) return;
-    const { width, height } = pixiContainerRef.current.getBoundingClientRect();
-    setPixiDimensions({ width, height });
-  }, []);
+  const [pixiDimensions, setPixiDimensions] = useState({ width: 800, height: 450 }); // Default 16:9, will be updated by ResizeObserver
 
   useEffect(() => {
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [handleResize]);
+    const targetElement = pixiContainerRef.current;
+    if (!targetElement) return;
+
+    const resizeObserver = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        if (entry.target === targetElement) {
+          const { width, height } = entry.contentRect;
+          console.log('[ResizeObserver] Detected dimensions:', { width, height });
+          // Only update if dimensions actually changed to avoid potential loops if not careful
+          setPixiDimensions(prevDims => {
+            if (prevDims.width !== width || prevDims.height !== height) {
+              console.log('[ResizeObserver] Setting new dimensions:', { width, height });
+              return { width, height };
+            }
+            return prevDims;
+          });
+        }
+      }
+    });
+
+    resizeObserver.observe(targetElement);
+
+    // Clean up observer on component unmount
+    return () => {
+      resizeObserver.unobserve(targetElement);
+      resizeObserver.disconnect();
+    };
+  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
   const workerTypes = [
     { type: 'Miner', cost: { gold: 50 }, current: workers.Miner },
@@ -134,7 +152,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   ];
 
   return (
-    <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-200 text-base-content">
+    <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content">
       {/* Header Navbar */}
       <div className="navbar bg-base-300 shadow-lg sticky top-0 z-50 flex flex-col sm:flex-row py-2 sm:py-0">
         <div className="navbar-start min-w-0 sm:w-auto flex flex-col items-center sm:flex-row sm:justify-start sm:items-center order-1 sm:order-none w-full sm:w-auto py-1 sm:py-0">
@@ -175,20 +193,23 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       {/* Main Content Area */}
       <div className="flex-grow flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 gap-2 sm:gap-4">
         {/* Game Canvas */}
-        <div className="min-h-[clamp(200px,40vh,350px)] flex-grow lg:flex-grow-0 lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-hidden flex justify-center items-center p-1 sm:p-2">
-          <div ref={pixiContainerRef} className="relative w-full max-w-full h-auto" style={{ aspectRatio: '16/9' }}>
-            <PixiStage 
-              width={pixiDimensions.width} 
-              height={pixiDimensions.height} 
-              enemies={enemies} 
-              units={units} 
-              playerNames={[playerName]} 
-            />
+        <div className="min-h-[clamp(200px,40vh,350px)] flex-grow lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-hidden flex p-1 sm:p-2">
+          <div ref={pixiContainerRef} className="relative w-full h-full">
+            {pixiDimensions.width > 0 && pixiDimensions.height > 0 && (
+              <PixiStage 
+                key={`${pixiDimensions.width}-${pixiDimensions.height}`}
+                width={pixiDimensions.width} 
+                height={pixiDimensions.height} 
+                enemies={enemies} 
+                units={units} 
+                playerNames={[playerName]} 
+              />
+            )}
           </div>
         </div>
 
         {/* Sidebar */}
-        <div className="min-h-0 flex-grow lg:flex-grow-0 lg:w-1/3 xl:w-1/4 lg:h-full flex flex-col space-y-2 sm:space-y-4 overflow-y-auto bg-base-100 p-2 sm:p-4 rounded-lg shadow-xl scrollbar-thin scrollbar-thumb-primary scrollbar-track-base-300">
+        <div className="min-h-0 flex-grow lg:flex-grow-0 lg:w-1/3 xl:w-1/4 lg:h-full flex flex-col space-y-2 sm:space-y-4 overflow-y-auto bg-base-200 p-2 sm:p-4 rounded-lg shadow-xl scrollbar-thin scrollbar-thumb-primary scrollbar-track-base-300">
           
           {/* Resources Section */}
           <div className="card bg-base-300 shadow-md compact">
@@ -211,7 +232,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <h3 className="card-title text-md sm:text-lg">Workers</h3>
               <div className="space-y-2 mt-2">
                 {workerTypes.map(worker => (
-                  <div key={worker.type} className="flex items-center justify-between p-2 bg-base-100 rounded-md">
+                  <div key={worker.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{worker.type} <span className="badge badge-neutral badge-sm">x{worker.current}</span></p>
                       <p className="text-xs text-base-content/70">Cost: {worker.cost.gold}G</p>
@@ -235,7 +256,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <h3 className="card-title text-md sm:text-lg">Military Units</h3>
               <div className="space-y-2 mt-2">
                 {unitTypes.map(unit => (
-                  <div key={unit.type} className="flex items-center justify-between p-2 bg-base-100 rounded-md">
+                  <div key={unit.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{unit.type} <span className="badge badge-neutral badge-sm">x{unit.current}</span></p>
                       <p className="text-xs text-base-content/70">Cost: {unit.cost.gold}G / {unit.cost.food}F</p>

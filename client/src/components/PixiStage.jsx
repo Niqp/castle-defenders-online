@@ -1,35 +1,38 @@
 import React, { useMemo } from 'react';
-import { Application, extend } from '@pixi/react';
+import { Application, extend } from '@pixi/react'; // Reverted Stage to Application
 import { Container, Graphics } from 'pixi.js';
 extend({ Container, Graphics });
 
-// Logical to canvas coordinate mapping
-function logicalToCanvas(x, y, width, height) {
-  const px = width / 2 + (x / 40) * (width / 2 * 0.9);
-  const py = height * 0.1 + (y / 100) * (height * 0.8);
+const LOGICAL_WIDTH = 1600;
+const LOGICAL_HEIGHT = 900;
+
+// Logical to canvas coordinate mapping (within the LOGICAL_WIDTH x LOGICAL_HEIGHT space)
+function logicalToCanvas(x, y) {
+  const px = LOGICAL_WIDTH / 2 + (x / 40) * (LOGICAL_WIDTH / 2 * 0.9);
+  const py = LOGICAL_HEIGHT * 0.1 + (y / 100) * (LOGICAL_HEIGHT * 0.8);
   return { x: px, y: py };
 }
 
-// Draw road, castle, portal
-const drawRoad = (g, width, height) => {
+// Draw road, castle, portal using LOGICAL_WIDTH and LOGICAL_HEIGHT
+const drawRoad = (g) => {
   g.clear();
-  const roadTop = logicalToCanvas(0, 0, width, height);
-  const roadBot = logicalToCanvas(0, 100, width, height);
-  g.rect(roadTop.x - width * 0.03, roadTop.y, width * 0.06, roadBot.y - roadTop.y);
+  const roadTop = logicalToCanvas(0, 0);
+  const roadBot = logicalToCanvas(0, 100);
+  g.rect(roadTop.x - LOGICAL_WIDTH * 0.03, roadTop.y, LOGICAL_WIDTH * 0.06, roadBot.y - roadTop.y);
   g.fill({ color: 0x444444 });
 };
 
-const drawCastle = (g, width, height) => {
+const drawCastle = (g) => {
   g.clear();
-  const castlePos = logicalToCanvas(0, 100, width, height);
-  g.rect(castlePos.x - width * 0.028, castlePos.y - height * 0.08, width * 0.056, height * 0.13);
+  const castlePos = logicalToCanvas(0, 100);
+  g.rect(castlePos.x - LOGICAL_WIDTH * 0.028, castlePos.y - LOGICAL_HEIGHT * 0.08, LOGICAL_WIDTH * 0.056, LOGICAL_HEIGHT * 0.13);
   g.fill({ color: 0xaaaaee });
 };
 
-const drawPortal = (g, width, height) => {
+const drawPortal = (g) => {
   g.clear();
-  const portalPos = logicalToCanvas(0, 0, width, height);
-  g.circle(portalPos.x, portalPos.y, Math.min(width, height) * 0.045);
+  const portalPos = logicalToCanvas(0, 0);
+  g.circle(portalPos.x, portalPos.y, Math.min(LOGICAL_WIDTH, LOGICAL_HEIGHT) * 0.045);
   g.fill({ color: 0x9933cc });
 };
 
@@ -48,65 +51,88 @@ function getUnitColor(type) {
   return 0xdddddd;
 }
 
-// Player spawn logic
-function getPlayerSpawns(playerNames, width, height) {
-  if (!playerNames || playerNames.length === 0) return [{ x: 0, y: 100 }];
+// Player spawn logic using LOGICAL_WIDTH and LOGICAL_HEIGHT
+function getPlayerSpawns(playerNames) {
+  if (!playerNames || playerNames.length === 0) return [logicalToCanvas(0, 100)]; // Default spawn at castle
   return playerNames.map((_, i) => {
     const n = playerNames.length;
-    const x = n === 1 ? 0 : -30 + (60 * i) / (n - 1);
-    return logicalToCanvas(x, 100, width, height);
+    const x = n === 1 ? 0 : -30 + (60 * i) / (n - 1); // Logical x coordinate
+    return logicalToCanvas(x, 100); // y=100 is castle line
   });
 }
 
 export default function PixiStage({
-  width = 800,
-  height = 600,
+  width = 800, // Actual component width
+  height = 600, // Actual component height
   enemies = [],
   units = [],
   playerNames = [],
 }) {
-  // Memoize spawn points
-  const playerSpawns = useMemo(() => getPlayerSpawns(playerNames, width, height), [playerNames, width, height]);
+  const scale = Math.min(width / LOGICAL_WIDTH, height / LOGICAL_HEIGHT);
+  const gameAreaWidth = LOGICAL_WIDTH * scale;
+  const gameAreaHeight = LOGICAL_HEIGHT * scale;
+  const offsetX = (width - gameAreaWidth) / 2;
+  const offsetY = (height - gameAreaHeight) / 2;
 
-  // Memoized draw callbacks for static objects
-  const drawRoadMemo = useMemo(() => g => drawRoad(g, width, height), [width, height]);
-  const drawCastleMemo = useMemo(() => g => drawCastle(g, width, height), [width, height]);
-  const drawPortalMemo = useMemo(() => g => drawPortal(g, width, height), [width, height]);
+  const playerSpawns = useMemo(() => getPlayerSpawns(playerNames), [playerNames]);
+
+  const drawRoadMemo = useMemo(() => g => drawRoad(g), []);
+  const drawCastleMemo = useMemo(() => g => drawCastle(g), []);
+  const drawPortalMemo = useMemo(() => g => drawPortal(g), []);
+
+  // Define base sizes in logical units
+  const SPAWN_RADIUS = LOGICAL_WIDTH * 0.012;
+  const ENEMY_RADIUS = LOGICAL_WIDTH * 0.02;
+  const UNIT_WIDTH = LOGICAL_WIDTH * 0.015; // Approx 24 for LOGICAL_WIDTH 1600
+  const UNIT_HEIGHT = LOGICAL_HEIGHT * 0.04; // Approx 36 for LOGICAL_HEIGHT 900
+
+  const HP_BAR_HEIGHT_ENEMY = ENEMY_RADIUS * 0.25;
+  const HP_BAR_OFFSET_Y_ENEMY = ENEMY_RADIUS * 0.3;
+
+  const HP_BAR_HEIGHT_UNIT = UNIT_HEIGHT * 0.15;
+  const HP_BAR_OFFSET_Y_UNIT = UNIT_HEIGHT * 0.1;
 
   return (
-    <Application width={width} height={height} background={0x222222}>
-      <pixiContainer>
+    <Application 
+      width={width} 
+      height={height} 
+      background={0x222222}
+      // resolution={typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1} // Temporarily commented out
+      // autoDensity={true} // Temporarily commented out
+    >
+      <pixiContainer x={offsetX} y={offsetY} scale={scale}>
         <pixiGraphics draw={drawRoadMemo} />
         <pixiGraphics draw={drawCastleMemo} />
         <pixiGraphics draw={drawPortalMemo} />
-        {/* Player spawns */}
+        
         {playerSpawns.map((pos, i) => (
           <pixiGraphics
             key={"spawn-" + i}
             draw={g => {
               g.clear();
-              g.circle(0, 0, Math.max(10, width * 0.012));
+              g.circle(0, 0, SPAWN_RADIUS);
               g.fill({ color: 0x44bbee });
             }}
             x={pos.x}
             y={pos.y}
           />
         ))}
-        {/* Enemies */}
+        
         {enemies.map(enemy => {
-          const pos = logicalToCanvas(enemy.x, enemy.y, width, height);
+          const pos = logicalToCanvas(enemy.x, enemy.y);
           return (
             <pixiGraphics
               key={"enemy-" + enemy.id}
               draw={g => {
                 g.clear();
-                g.circle(0, 0, Math.max(18, width * 0.02));
+                g.circle(0, 0, ENEMY_RADIUS);
                 g.fill({ color: getEnemyColor(enemy.type) });
-                // HP Bar
+                
                 const hpPerc = Math.max(0, enemy.hp / (enemy.maxHp || 30));
-                g.rect(-18, -30, 36, 6);
+                const hpBarCenterY = -(ENEMY_RADIUS + HP_BAR_OFFSET_Y_ENEMY + HP_BAR_HEIGHT_ENEMY / 2);
+                g.rect(-ENEMY_RADIUS, hpBarCenterY - HP_BAR_HEIGHT_ENEMY / 2, ENEMY_RADIUS * 2, HP_BAR_HEIGHT_ENEMY);
                 g.fill({ color: 0xff0000 });
-                g.rect(-18, -30, 36 * hpPerc, 6);
+                g.rect(-ENEMY_RADIUS, hpBarCenterY - HP_BAR_HEIGHT_ENEMY / 2, ENEMY_RADIUS * 2 * hpPerc, HP_BAR_HEIGHT_ENEMY);
                 g.fill({ color: 0x00ff00 });
               }}
               x={pos.x}
@@ -114,21 +140,22 @@ export default function PixiStage({
             />
           );
         })}
-        {/* Units */}
+        
         {units.map(unit => {
-          const pos = logicalToCanvas(unit.x, unit.y, width, height);
+          const pos = logicalToCanvas(unit.x, unit.y);
           return (
             <pixiGraphics
               key={"unit-" + unit.id}
               draw={g => {
                 g.clear();
-                g.rect(-12, -18, 24, 36);
+                g.rect(-UNIT_WIDTH / 2, -UNIT_HEIGHT / 2, UNIT_WIDTH, UNIT_HEIGHT);
                 g.fill({ color: getUnitColor(unit.type) });
-                // HP Bar
+                
                 const hpPerc = Math.max(0, unit.hp / (unit.maxHp || 30));
-                g.rect(-12, -30, 24, 6);
+                const hpBarCenterY = -(UNIT_HEIGHT / 2 + HP_BAR_OFFSET_Y_UNIT + HP_BAR_HEIGHT_UNIT / 2);
+                g.rect(-UNIT_WIDTH / 2, hpBarCenterY - HP_BAR_HEIGHT_UNIT / 2, UNIT_WIDTH, HP_BAR_HEIGHT_UNIT);
                 g.fill({ color: 0xff0000 });
-                g.rect(-12, -30, 24 * hpPerc, 6);
+                g.rect(-UNIT_WIDTH / 2, hpBarCenterY - HP_BAR_HEIGHT_UNIT / 2, UNIT_WIDTH * hpPerc, HP_BAR_HEIGHT_UNIT);
                 g.fill({ color: 0x00ff00 });
               }}
               x={pos.x}
