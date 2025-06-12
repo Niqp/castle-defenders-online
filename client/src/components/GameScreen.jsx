@@ -16,11 +16,12 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const [playerUnits, setPlayerUnits] = useState(gameState?.playerUnits ?? { Swordsman: 0, Archer: 0, Knight: 0 });
   const [enemies, setEnemies] = useState(gameState?.enemies ?? []);
   const [units, setUnits] = useState(gameState?.units ?? []); // Assuming units are player-controlled units on the map
+  const [wave, setWave] = useState(gameState?.wave ?? 1);
+  const [grid, setGrid] = useState(gameState?.grid ?? []);
 
   const prevEnemiesRef = useRef(gameState?.enemies ?? []);
   const lastUpdateRef = useRef(Date.now());
 
-  const [wave, setWave] = useState(gameState?.wave ?? 1);
   const [nextWaveIn, setNextWaveIn] = useState(gameState?.nextWaveIn ?? 60); // Default to 60s
   const lastWaveUpdateRef = useRef(Date.now());
   const lastWaveValueRef = useRef(gameState?.nextWaveIn ?? 60);
@@ -49,6 +50,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
         lastWaveUpdateRef.current = Date.now();
       }
       if (data.castleHp !== undefined) setCastleHp(data.castleHp);
+      if (data.grid) setGrid(data.grid);
     });
     socket.on('spawnEnemies', (data) => {
       if (data && Array.isArray(data.enemies)) {
@@ -196,13 +198,11 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
         <div className="min-h-[clamp(200px,40vh,350px)] flex-grow lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-hidden flex p-1 sm:p-2">
           <div ref={pixiContainerRef} className="relative w-full h-full">
             {pixiDimensions.width > 0 && pixiDimensions.height > 0 && (
-              <PixiStage 
+              <PixiStage
                 key={`${pixiDimensions.width}-${pixiDimensions.height}`}
-                width={pixiDimensions.width} 
-                height={pixiDimensions.height} 
-                enemies={enemies} 
-                units={units} 
-                playerNames={[playerName]} 
+                width={pixiDimensions.width}
+                height={pixiDimensions.height}
+                grid={grid}
               />
             )}
           </div>
