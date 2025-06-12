@@ -21,6 +21,19 @@ class Unit {
   takeDamage(amount) {
     this.health = Math.max(0, this.health - amount);
   }
+
+  // Ensure clean serialisation across Socket.IO / JSON
+  toJSON() {
+    return {
+      id: this.id,
+      type: this.type,
+      health: this.health,
+      maxHealth: this.maxHealth,
+      damage: this.damage,
+      row: this.row,
+      col: this.col,
+    };
+  }
 }
 
 export default Unit;

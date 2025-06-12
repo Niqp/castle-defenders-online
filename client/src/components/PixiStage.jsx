@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { Application, extend } from '@pixi/react';
 import { Container, Graphics } from 'pixi.js';
 
@@ -29,6 +29,77 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const gameAreaHeight = rows * scale;
   const offsetX = (width - gameAreaWidth) / 2;
   const offsetY = (height - gameAreaHeight) / 2;
+
+  /***************   Animation state refs   ****************/
+  const prevPosRef = useRef(new Map());            // id -> {x,y}
+  const targetPosRef = useRef(new Map());          // id -> {x,y}
+  const lastUpdateRef = useRef(Date.now());
+
+  const ANIM_MS = 300; // duration of movement tween
+
+  // local state counter to trigger re-render
+  const [, setFrameTick] = React.useState(0);
+
+  // force re-render every animation frame for smooth tweening
+  useEffect(() => {
+    let raf;
+    const tick = () => {
+      setFrameTick(f => f + 1);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // when targets updated, trigger immediate render so circles appear
+  useEffect(() => {
+    setFrameTick(f => f + 1);
+  }, [grid]);
+
+  // Utility to compute target positions for all units in current grid
+  const computeTargets = () => {
+    const targets = new Map();
+    for (let r = 0; r < rows; r++) {
+      const rowArr = Array.isArray(grid[r]) ? grid[r] : [];
+      for (let c = 0; c < cols; c++) {
+        const cell = rowArr[c];
+        const units = Array.isArray(cell) ? cell : cell ? [cell] : [];
+        if (!units.length) continue;
+        const players = units.filter(u => u.type === 'player');
+        const enemies = units.filter(u => u.type === 'enemy');
+
+        // helper to assign horizontal slots within half-cell
+        const assignHalf = (arr, half) => {
+          const count = arr.length;
+          arr.forEach((unit, idx) => {
+            const base = cellCenter(r, c);
+            const yHalfOffset = half === 'top' ? -0.25 : 0.25;
+            const spacing = 0.8 / Math.max(count, 1); // total width ~0.8 logical units
+            const xOffset = (-0.4) + spacing * (idx + 0.5);
+            targets.set(unit.id, { x: base.x + xOffset, y: base.y + yHalfOffset });
+          });
+        };
+
+        assignHalf(enemies, 'top');
+        assignHalf(players, 'bottom');
+      }
+    }
+    return targets;
+  };
+
+  // Update target positions when grid changes
+  useEffect(() => {
+    targetPosRef.current = computeTargets();
+    // keep any previous positions for interpolation; if a unit is new, set prev=target so no pop-in
+    for (let [id, pos] of targetPosRef.current.entries()) {
+      if (!prevPosRef.current.has(id)) prevPosRef.current.set(id, { ...pos });
+    }
+    // Remove positions for units that disappeared
+    for (let id of Array.from(prevPosRef.current.keys())) {
+      if (!targetPosRef.current.has(id)) prevPosRef.current.delete(id);
+    }
+    lastUpdateRef.current = Date.now();
+  }, [grid, rows, cols]);
 
   /***************   Memoised Drawers   ****************/
   const drawPortalRow = useMemo(() => (g) => {
@@ -66,63 +137,36 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   /***************   Units Render   ****************/
   const renderUnits = () => {
     const elements = [];
-    for (let r = 0; r < rows; r++) {
-      const rowArr = Array.isArray(grid[r]) ? grid[r] : [];
-      for (let c = 0; c < cols; c++) {
-        const cell = rowArr[c];
-        const units = Array.isArray(cell) ? cell : cell ? [cell] : [];
-        const { x: cx, y: cy } = cellCenter(r, c);
-        units.forEach((unit, idx) => {
-          const { dx, dy } = offsetWithinCell(idx, units.length, 0.25);
-          const posX = cx + dx;
-          const posY = cy + dy;
-          const key = unit.id;
-          if (unit.type === 'enemy') {
-            elements.push(
-              <pixiGraphics
-                key={key}
-                x={posX}
-                y={posY}
-                draw={(g) => {
-                  g.clear();
-                  g.beginFill(0xff5555);
-                  g.drawCircle(0, 0, 0.35);
-                  g.endFill();
+    const now = Date.now();
+    const t = Math.min(1, (now - lastUpdateRef.current) / ANIM_MS);
 
-                  const hpPerc = unit.maxHealth ? Math.max(0, unit.health / unit.maxHealth) : 1;
-                  g.beginFill(0xff0000);
-                  g.drawRect(-0.35, 0.45, 0.7, 0.1);
-                  g.endFill();
-                  g.beginFill(0x00ff00);
-                  g.drawRect(-0.35, 0.45, 0.7 * hpPerc, 0.1);
-                  g.endFill();
-                }}
-              />
-            );
-          } else {
-            elements.push(
-              <pixiGraphics
-                key={key}
-                x={posX}
-                y={posY}
-                draw={(g) => {
-                  g.clear();
-                  g.beginFill(0x44bbee);
-                  g.drawRect(-0.4, -0.5, 0.8, 1);
-                  g.endFill();
+    for (let [id, target] of targetPosRef.current.entries()) {
+      const prev = prevPosRef.current.get(id) || target;
+      const interpX = prev.x + (target.x - prev.x) * t;
+      const interpY = prev.y + (target.y - prev.y) * t;
+      const unitType = id.startsWith('enemy') ? 'enemy' : 'player'; // fallback if type unavailable
+      const unitData = { type: unitType }; // minimal for draw color.
 
-                  const hpPerc = unit.maxHealth ? Math.max(0, unit.health / unit.maxHealth) : 1;
-                  g.beginFill(0xff0000);
-                  g.drawRect(-0.4, -0.65, 0.8, 0.1);
-                  g.endFill();
-                  g.beginFill(0x00ff00);
-                  g.drawRect(-0.4, -0.65, 0.8 * hpPerc, 0.1);
-                  g.endFill();
-                }}
-              />
-            );
-          }
-        });
+      // circle draw
+      const drawFn = (color) => (g) => {
+        g.clear();
+        g.beginFill(color);
+        g.drawCircle(0, 0, 0.3);
+        g.endFill();
+      };
+
+      elements.push(
+        <pixiGraphics
+          key={id}
+          x={interpX}
+          y={interpY}
+          draw={drawFn(unitType === 'enemy' ? 0xff5555 : 0x44bbee)}
+        />
+      );
+
+      // when animation complete update prevPos
+      if (t === 1) {
+        prevPosRef.current.set(id, target);
       }
     }
     return elements;

@@ -9,7 +9,7 @@ describe('Spawner', () => {
     expect(enemy.type).toBe('enemy');
     expect(enemy.maxHealth).toBe(10);
     expect(enemy.damage).toBe(2);
-    expect(enemy.row).toBe(1); // second from top
+    expect(enemy.row).toBe(0); // portal row
     expect(enemy.col).toBeGreaterThanOrEqual(0);
     expect(enemy.col).toBeLessThan(grid.columns);
     expect(grid.getUnitsInCell(1, enemy.col)).toContain(enemy);
