@@ -74,7 +74,7 @@ export class GameService {
         damage: req.dmg
       };
       // Use gameState.grid and add to global units map
-      const unit = Spawner.spawnPlayerUnit(this.gameState.grid, playerConfig, selectedCol);
+      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, selectedCol);
       this.gameState.addUnit(unit);
       // Optionally, emit new unit state to client(s)
       this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });

@@ -109,12 +109,12 @@ io.on(EVENTS.CONNECTION, socket => {
   });
 
   // ADD: Handle spawn unit from client
-  socket.on(EVENTS.SPAWN_UNIT, (type) => {
+  socket.on(EVENTS.SPAWN_UNIT, (type, col = 0) => {
     const roomId = roomManager.socketToRoom.get(socket.id);
     if (!roomId) return;
     const service = roomManager.rooms.get(roomId);
     if (service && typeof service.spawnUnit === 'function') {
-      service.spawnUnit(socket, type);
+      service.spawnUnit(socket, type, col);
     }
   });
 

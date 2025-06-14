@@ -84,7 +84,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     socketRef.current?.emit('hireWorker', type);
   }
   function handleSpawnUnit(type) {
-    socketRef.current?.emit('spawnUnit', type);
+    socketRef.current?.emit('spawnUnit', type, selectedCol);
   }
   function handleMine() {
     socketRef.current?.emit('mine');
@@ -180,6 +180,21 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       return true; // Unknown resources assumed unlimited for now
     });
   };
+
+  /* --------------------------
+   * Column selection state   
+   * -------------------------- */
+  const cols = useMemo(() => {
+    if (Array.isArray(grid) && grid.length && Array.isArray(grid[0])) return grid[0].length;
+    return 1;
+  }, [grid]);
+
+  const [selectedCol, setSelectedCol] = useState(0);
+
+  // Keep selected column within bounds whenever grid changes
+  useEffect(() => {
+    setSelectedCol(prev => Math.min(prev, Math.max(0, cols - 1)));
+  }, [cols]);
 
   return (
     <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content">
@@ -299,6 +314,35 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                   </div>
                 ))}
               </div>
+              {cols > 1 && (
+                <div className="form-control mb-3">
+                  <label className="label justify-between">
+                    <span className="label-text text-xs sm:text-sm">Spawn Column</span>
+                    <span className="label-text-alt text-xs">{selectedCol + 1}</span>
+                  </label>
+                  {cols <= 8 ? (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {Array.from({ length: cols }).map((_, idx) => (
+                        <button
+                          key={idx}
+                          className={`btn btn-xs sm:btn-sm flex-1 ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
+                          onClick={() => setSelectedCol(idx)}
+                        >{idx + 1}</button>
+                      ))}
+                    </div>
+                  ) : (
+                    <input
+                      type="range"
+                      min="0"
+                      max={cols - 1}
+                      step="1"
+                      value={selectedCol}
+                      onChange={(e) => setSelectedCol(Number(e.target.value))}
+                      className="range range-accent range-xs"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

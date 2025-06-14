@@ -33,6 +33,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   /***************   Animation state refs   ****************/
   const prevPosRef = useRef(new Map());            // id -> {x,y}
   const targetPosRef = useRef(new Map());          // id -> {x,y}
+  const metaRef = useRef(new Map());               // id -> {hp,maxHp,type}
   const lastUpdateRef = useRef(Date.now());
 
   const ANIM_MS = 300; // duration of movement tween
@@ -61,6 +62,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   // Utility to compute target positions for all units in current grid
   const computeTargets = () => {
     const targets = new Map();
+    const meta = new Map();
     for (let r = 0; r < rows; r++) {
       const rowArr = Array.isArray(grid[r]) ? grid[r] : [];
       for (let c = 0; c < cols; c++) {
@@ -85,6 +87,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
               x: base.x + xOffset,
               y: base.y + yHalfOffset,
             });
+            meta.set(unit.id, { hp: unit.health, maxHp: unit.maxHealth, type: unit.type });
           });
         };
 
@@ -92,6 +95,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         assignHalf(players, 'bottom');
       }
     }
+    metaRef.current = meta;
     return targets;
   };
 
@@ -153,13 +157,28 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       const interpX = prev.x + (target.x - prev.x) * t;
       const interpY = prev.y + (target.y - prev.y) * t;
       const radius = UNIT_RADIUS;
-      const unitType = id.startsWith('enemy') ? 'enemy' : 'player'; // fallback if type unavailable
+      const meta = metaRef.current.get(id);
+      const ratio = meta ? Math.max(0, meta.hp) / (meta.maxHp || 1) : 1;
+      const unitType = meta?.type || (id.startsWith('enemy') ? 'enemy' : 'player');
 
-      // circle draw
-      const drawFn = (color) => (g) => {
+      const drawFn = (g) => {
         g.clear();
-        g.beginFill(color);
+        // Draw circle
+        g.beginFill(unitType === 'enemy' ? 0xff5555 : 0x44bbee);
         g.drawCircle(0, 0, radius);
+        g.endFill();
+
+        // Draw HP bar background
+        const barWidth = radius * 2;
+        const barHeight = 0.08; // logical units
+        const barY = -radius - 0.15;
+        g.beginFill(0x333333);
+        g.drawRect(-radius, barY, barWidth, barHeight);
+        g.endFill();
+
+        // Draw HP bar fill
+        g.beginFill(0x00ff00);
+        g.drawRect(-radius, barY, barWidth * ratio, barHeight);
         g.endFill();
       };
 
@@ -168,7 +187,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
           key={id}
           x={interpX}
           y={interpY}
-          draw={drawFn(unitType === 'enemy' ? 0xff5555 : 0x44bbee)}
+          draw={drawFn}
         />
       );
 
