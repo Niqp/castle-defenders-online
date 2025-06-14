@@ -17,12 +17,40 @@ export default function App() {
   const navigate = useNavigate();
   const ROOM_ID = 'main';
 
-  // Initialize socket once
+  // Create or read a long-lived clientId and establish a socket connection.
   useEffect(() => {
+    const STORAGE_KEY = 'clientId';
+    let cid = localStorage.getItem(STORAGE_KEY);
+    if (!cid) {
+      // Generate a UUID using the browser's crypto API
+      cid = crypto.randomUUID();
+      localStorage.setItem(STORAGE_KEY, cid);
+    }
+
     if (!socketRef.current) {
-      socketRef.current = io(); // Connects to same origin by default
+      socketRef.current = io('/', { auth: { clientId: cid } });
     }
     const socket = socketRef.current;
+
+    // -------------------------
+    // Persistence / restore flow
+    // -------------------------
+    const handleShowWelcome = () => {
+      navigate('/');
+    };
+
+    const handleRestoreLobby = ({ lobby: lobbyState, playerName: name }) => {
+      setLobby(lobbyState);
+      setPlayerName(name);
+      setReady(!!lobbyState.ready?.[name]);
+      navigate('/lobby');
+    };
+
+    const handleRestoreGame = ({ gameState: restored, playerName: name }) => {
+      setGameState(restored);
+      setPlayerName(name);
+      navigate('/game');
+    };
 
     const handleLobbyUpdate = (lobbyState) => {
       setLobby(lobbyState);
@@ -39,10 +67,16 @@ export default function App() {
     // TODO: Add listener for game end to navigate to /end and setEndStats
     // Example: socket.on(EVENTS.GAME_END, (stats) => { setEndStats(stats); navigate('/end'); });
 
+    socket.on(EVENTS.SHOW_WELCOME, handleShowWelcome);
+    socket.on(EVENTS.RESTORE_LOBBY, handleRestoreLobby);
+    socket.on(EVENTS.RESTORE_GAME, handleRestoreGame);
     socket.on(EVENTS.LOBBY_UPDATE, handleLobbyUpdate);
     socket.on(EVENTS.GAME_START, handleGameStart);
 
     return () => {
+      socket.off(EVENTS.SHOW_WELCOME, handleShowWelcome);
+      socket.off(EVENTS.RESTORE_LOBBY, handleRestoreLobby);
+      socket.off(EVENTS.RESTORE_GAME, handleRestoreGame);
       socket.off(EVENTS.LOBBY_UPDATE, handleLobbyUpdate);
       socket.off(EVENTS.GAME_START, handleGameStart);
       // TODO: socket.off(EVENTS.GAME_END, ...);

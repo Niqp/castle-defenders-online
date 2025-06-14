@@ -183,4 +183,55 @@ export class GameService {
     this.countdownTicker?.stop();
     this.combatTicker?.stop();
   }
+
+  /**
+   * Sends a full state snapshot to a reconnecting client so that their UI can
+   * seamlessly resume. Currently this consists of the same payload that is
+   * emitted on GAME_START plus some live counters.
+   *
+   * @param {import('socket.io').Socket} socket
+   * @param {string} playerName – The logical player name stored on the server.
+   */
+  syncState(socket, playerName) {
+    if (!this.gameState) {
+      // If the game hasn't started yet, just treat it like a lobby join instead.
+      this.io.to(socket.id).emit(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
+      return;
+    }
+
+    // Ensure stale socketIds for the same logical user are cleared so that the
+    // ResourceTicker doesn't emit to a closed connection (which would starve
+    // the new one of updates because of the early `break` inside its loop).
+    for (const [id, name] of this.socketToName) {
+      if (name === playerName && id !== socket.id) {
+        this.socketToName.delete(id);
+      }
+    }
+    this.socketToName.set(socket.id, playerName);
+
+    const player = this.gameState.players.find(p => p.name === playerName);
+
+    const payload = {
+      wave: this.gameState.wave,
+      nextWaveIn: this.gameState.nextWaveIn,
+      castleHp: this.gameState.castleHealth,
+      grid: this.gameState.grid,
+      players: this.gameState.players,
+      workerTypes: WORKER_TYPES,
+      unitTypes: UNIT_TYPES,
+      playerName,
+      roomId: this.roomId,
+      // Player-specific live resources at reconnect time
+      gold: Math.floor(player?.gold ?? 0),
+      food: Math.floor(player?.food ?? 0),
+      workers: player?.workers ?? {},
+      playerUnits: player?.units ?? {}
+    };
+
+    socket.emit(EVENTS.RESTORE_GAME, { gameState: payload, playerName, roomId: this.roomId });
+
+    // Also send a direct RESOURCE_UPDATE so the client UI can hydrate even if it
+    // relies purely on that event stream.
+    if (player) this._emitResourceUpdate(socket, player);
+  }
 }

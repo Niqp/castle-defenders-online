@@ -20,4 +20,9 @@ export const EVENTS = {
   SPAWN_UNITS: 'spawnUnits',
   STATE_UPDATE: 'stateUpdate',
   GAME_OVER: 'gameOver',
+
+  // Client persistence events
+  SHOW_WELCOME: 'showWelcome',
+  RESTORE_LOBBY: 'restoreLobby',
+  RESTORE_GAME: 'restoreGame',
 };

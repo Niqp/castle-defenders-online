@@ -17,5 +17,10 @@ export const EVENTS = {
   SPAWN_ENEMIES: 'spawnEnemies',
   SPAWN_UNITS: 'spawnUnits',
   STATE_UPDATE: 'stateUpdate',
-  GAME_OVER: 'gameOver'
+  GAME_OVER: 'gameOver',
+
+  // Client persistence events (should mirror server names)
+  SHOW_WELCOME: 'showWelcome',
+  RESTORE_LOBBY: 'restoreLobby',
+  RESTORE_GAME: 'restoreGame'
 };

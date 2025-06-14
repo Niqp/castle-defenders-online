@@ -19,3 +19,6 @@ export const UNIT_TYPES = {
   Knight: { costs: { gold: 400, food: 40 }, hp: 50, dmg: 10, range: 40, speed: 3 },
 };
 export const ENEMY_TYPES = ['goblin', 'orc', 'troll'];
+
+// How long (in ms) we keep a clientId mapping without activity before it is purged.
+export const CLIENT_TTL_MS = 1000 * 60 * 60; // 1 hour by default
