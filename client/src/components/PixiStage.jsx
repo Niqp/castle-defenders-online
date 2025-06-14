@@ -37,7 +37,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const moveTimeRef = useRef(new Map());           // id -> timestamp of last movement
   const battleEndTimeRef = useRef(new Map());      // id -> timestamp when battle ended
 
-  const ANIM_MS = 300; // duration of movement tween
+  const SERVER_TICK_MS = 1000; // Matches CombatTicker interval
+  const ANIM_MS = SERVER_TICK_MS; // movement tween equals tick duration
   // Constant circle radius (logical units) chosen small enough to fit many units per cell
   const UNIT_RADIUS = 0.15;
 
@@ -199,9 +200,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
 
       if (meta?.inBattle) {
         const cycleMs = 1000; // server combat tick
-        const rawPhase = ((now % cycleMs) / cycleMs); // 0 → 1 starting at tick
-        const approachPortion = 0.6; // 60% time forward
-        const phase = (rawPhase + approachPortion) % 1; // shift so contact aligns with tick
+        const phase = ((now % cycleMs) / cycleMs); // 0 at tick, 0→1
 
         const halfOffset = unitType === 'player' ? 0.25 : -0.25;
         // Direction based on actual horizontal position inside the cell
@@ -215,17 +214,17 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         }
         const curveAmp = 0.06; // horizontal curve on retreat
 
-        if (phase < approachPortion) {
-          // Straight-line slow approach (constant speed)
-          const p = phase / approachPortion; // 0 → 1
-          battleOffsetY = -halfOffset * p;
-          battleOffsetX = 0;
-        } else {
-          // Fast curved retreat with ease-out
-          const p = (phase - approachPortion) / (1 - approachPortion); // 0 → 1
-          const ease = 1 - Math.pow(1 - p, 2); // quadratic ease-out
-          battleOffsetY = -halfOffset * (1 - ease);
+        if (phase < 0.5) {
+          // Retreat: 0 → 0.5 (fast, curved)
+          const p = phase * 2; // 0 → 1
+          const ease = 1 - Math.pow(1 - p, 1.5); // ease-out faster
+          battleOffsetY = -halfOffset * ease;
           battleOffsetX = curveAmp * Math.sin(Math.PI * ease) * dirX;
+        } else {
+          // Approach back: 0.5 → 1 (slow, straight)
+          const p = (phase - 0.5) * 2; // 0 → 1
+          battleOffsetY = -halfOffset * (1 - p);
+          battleOffsetX = 0;
         }
       } else {
         // Not in battle. Check if we just ended battle and need smooth return
