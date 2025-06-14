@@ -34,7 +34,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const prevPosRef = useRef(new Map());            // id -> {x,y}
   const targetPosRef = useRef(new Map());          // id -> {x,y}
   const metaRef = useRef(new Map());               // id -> {hp,maxHp,type}
-  const lastUpdateRef = useRef(Date.now());
+  const moveTimeRef = useRef(new Map());           // id -> timestamp of last movement
 
   const ANIM_MS = 300; // duration of movement tween
   // Constant circle radius (logical units) chosen small enough to fit many units per cell
@@ -101,16 +101,34 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
 
   // Update target positions when grid changes
   useEffect(() => {
-    targetPosRef.current = computeTargets();
-    // keep any previous positions for interpolation; if a unit is new, set prev=target so no pop-in
-    for (let [id, pos] of targetPosRef.current.entries()) {
-      if (!prevPosRef.current.has(id)) prevPosRef.current.set(id, { ...pos });
+    const newTargets = computeTargets();
+
+    // Iterate to update refs and detect movements
+    for (let [id, newPos] of newTargets.entries()) {
+      const prevPos = targetPosRef.current.get(id);
+      if (!prevPos) {
+        // new unit – start with no tween
+        prevPosRef.current.set(id, { ...newPos });
+        moveTimeRef.current.set(id, Date.now());
+      } else if (prevPos.x !== newPos.x || prevPos.y !== newPos.y) {
+        // position changed – update prevPos and timestamp
+        prevPosRef.current.set(id, { ...prevPos });
+        moveTimeRef.current.set(id, Date.now());
+      }
     }
-    // Remove positions for units that disappeared
-    for (let id of Array.from(prevPosRef.current.keys())) {
-      if (!targetPosRef.current.has(id)) prevPosRef.current.delete(id);
+
+    // Remove data for units that disappeared
+    for (let id of Array.from(targetPosRef.current.keys())) {
+      if (!newTargets.has(id)) {
+        targetPosRef.current.delete(id);
+        prevPosRef.current.delete(id);
+        metaRef.current.delete(id);
+        moveTimeRef.current.delete(id);
+      }
     }
-    lastUpdateRef.current = Date.now();
+
+    // Finally replace targets
+    targetPosRef.current = newTargets;
   }, [grid, rows, cols]);
 
   /***************   Memoised Drawers   ****************/
@@ -150,12 +168,13 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const renderUnits = () => {
     const elements = [];
     const now = Date.now();
-    const t = Math.min(1, (now - lastUpdateRef.current) / ANIM_MS);
 
     for (let [id, target] of targetPosRef.current.entries()) {
       const prev = prevPosRef.current.get(id) || target;
-      const interpX = prev.x + (target.x - prev.x) * t;
-      const interpY = prev.y + (target.y - prev.y) * t;
+      const lastMove = moveTimeRef.current.get(id) || now;
+      const localT = Math.min(1, (now - lastMove) / ANIM_MS);
+      const interpX = prev.x + (target.x - prev.x) * localT;
+      const interpY = prev.y + (target.y - prev.y) * localT;
       const radius = UNIT_RADIUS;
       const meta = metaRef.current.get(id);
       const ratio = meta ? Math.max(0, meta.hp) / (meta.maxHp || 1) : 1;
@@ -192,7 +211,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       );
 
       // when animation complete update prevPos
-      if (t === 1) {
+      if (localT === 1) {
         prevPosRef.current.set(id, target);
       }
     }
