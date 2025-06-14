@@ -35,6 +35,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const targetPosRef = useRef(new Map());          // id -> {x,y}
   const metaRef = useRef(new Map());               // id -> {hp,maxHp,type}
   const moveTimeRef = useRef(new Map());           // id -> timestamp of last movement
+  const battleEndTimeRef = useRef(new Map());      // id -> timestamp when battle ended
 
   const ANIM_MS = 300; // duration of movement tween
   // Constant circle radius (logical units) chosen small enough to fit many units per cell
@@ -102,7 +103,16 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
 
   // Update target positions when grid changes
   useEffect(() => {
+    const prevMetaSnapshot = new Map(metaRef.current);
     const newTargets = computeTargets();
+
+    // Detect battle end to start retreat tween
+    for (let [id, newMeta] of metaRef.current.entries()) {
+      const prevMeta = prevMetaSnapshot.get(id);
+      if (prevMeta && prevMeta.inBattle && !newMeta.inBattle) {
+        battleEndTimeRef.current.set(id, Date.now());
+      }
+    }
 
     // Iterate to update refs and detect movements
     for (let [id, newPos] of newTargets.entries()) {
@@ -125,6 +135,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         prevPosRef.current.delete(id);
         metaRef.current.delete(id);
         moveTimeRef.current.delete(id);
+        battleEndTimeRef.current.delete(id);
       }
     }
 
@@ -184,6 +195,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       // Battle animation: slow approach, fast curved retreat
       let battleOffsetY = 0;
       let battleOffsetX = 0;
+      const RETURN_MS = 300;
+
       if (meta?.inBattle) {
         const cycleMs = 1000; // server combat tick
         const rawPhase = ((now % cycleMs) / cycleMs); // 0 → 1 starting at tick
@@ -213,6 +226,24 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
           const ease = 1 - Math.pow(1 - p, 2); // quadratic ease-out
           battleOffsetY = -halfOffset * (1 - ease);
           battleOffsetX = curveAmp * Math.sin(Math.PI * ease) * dirX;
+        }
+      } else {
+        // Not in battle. Check if we just ended battle and need smooth return
+        const endTime = battleEndTimeRef.current.get(id);
+        if (endTime) {
+          const elapsed = now - endTime;
+          if (elapsed < RETURN_MS) {
+            const halfOffset = unitType === 'player' ? 0.25 : -0.25;
+            const p = 1 - elapsed / RETURN_MS; // decays from 1→0
+            // Use same dirX determination
+            const cellCenterX = Math.floor(target.x) + 0.5;
+            const dirX = target.x < cellCenterX ? -1 : 1;
+            const curveAmp = 0.04;
+            battleOffsetY = -halfOffset * p;
+            battleOffsetX = curveAmp * Math.sin(Math.PI * p) * dirX;
+          } else {
+            battleEndTimeRef.current.delete(id); // finished
+          }
         }
       }
 
