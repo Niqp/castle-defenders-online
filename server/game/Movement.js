@@ -6,7 +6,11 @@ function moveEnemyUnits(grid, onCastleHit) {
     for (let col = 0; col < grid.columns; col++) {
       const units = [...grid.getUnitsInCell(row, col).filter(u => u.type === 'enemy')];
       for (const unit of units) {
-        if (unit.justSpawned) { unit.justSpawned = false; continue; }
+        if (unit.justSpawned) {
+          // Enemy waits one tick after spawning
+          unit.justSpawned = false;
+          continue;
+        }
         if (unit.inBattle) continue;
         if (grid.isCastleCell(unit.row)) continue;
 
@@ -40,8 +44,10 @@ function movePlayerUnits(grid, onPortalReached) {
     for (let col = 0; col < grid.columns; col++) {
       const units = [...grid.getUnitsInCell(row, col).filter(u => u.type === 'player')];
       for (const unit of units) {
-        // Newly spawned units wait one tick
-        if (unit.justSpawned) { unit.justSpawned = false; continue; }
+        if (unit.justSpawned) {
+          // Clear spawn flag so the unit moves on its first eligible tick
+          unit.justSpawned = false;
+        }
         if (unit.inBattle) continue;
 
         const nextRow = unit.row - 1;

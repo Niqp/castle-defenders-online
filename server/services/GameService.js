@@ -78,6 +78,10 @@ export class GameService {
       this.gameState.addUnit(unit);
       // Optionally, emit new unit state to client(s)
       this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });
+      // Send immediate grid update so clients render the unit without waiting for next tick
+      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
+        grid: this.gameState.grid.cells
+      });
     });
   }
 
