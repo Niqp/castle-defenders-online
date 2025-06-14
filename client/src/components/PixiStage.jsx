@@ -71,6 +71,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         if (!units.length) continue;
         const players = units.filter(u => u.type === 'player');
         const enemies = units.filter(u => u.type === 'enemy');
+        const cellInBattle = players.length && enemies.length;
 
         // helper to assign horizontal slots within half-cell
         const assignHalf = (arr, half) => {
@@ -87,7 +88,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
               x: base.x + xOffset,
               y: base.y + yHalfOffset,
             });
-            meta.set(unit.id, { hp: unit.health, maxHp: unit.maxHealth, type: unit.type });
+            meta.set(unit.id, { hp: unit.health, maxHp: unit.maxHealth, type: unit.type, inBattle: cellInBattle });
           });
         };
 
@@ -180,6 +181,32 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       const ratio = meta ? Math.max(0, meta.hp) / (meta.maxHp || 1) : 1;
       const unitType = meta?.type || (id.startsWith('enemy') ? 'enemy' : 'player');
 
+      // Battle animation: slow approach, fast curved retreat
+      let battleOffsetY = 0;
+      let battleOffsetX = 0;
+      if (meta?.inBattle) {
+        const cycleMs = 1000; // server combat tick
+        const phase = ((now % cycleMs) / cycleMs); // 0 → 1
+
+        const approachPortion = 0.6; // 60% time moving forward
+        const halfOffset = unitType === 'player' ? 0.25 : -0.25;
+        const dirX = unitType === 'player' ? -1 : 1;
+        const curveAmp = 0.06; // horizontal curve on retreat
+
+        if (phase < approachPortion) {
+          // Straight-line slow approach (constant speed)
+          const p = phase / approachPortion; // 0 → 1
+          battleOffsetY = -halfOffset * p;
+          battleOffsetX = 0;
+        } else {
+          // Fast curved retreat with ease-out
+          const p = (phase - approachPortion) / (1 - approachPortion); // 0 → 1
+          const ease = 1 - Math.pow(1 - p, 2); // quadratic ease-out
+          battleOffsetY = -halfOffset * (1 - ease);
+          battleOffsetX = curveAmp * Math.sin(Math.PI * ease) * dirX;
+        }
+      }
+
       const drawFn = (g) => {
         g.clear();
         // Draw circle
@@ -204,8 +231,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       elements.push(
         <pixiGraphics
           key={id}
-          x={interpX}
-          y={interpY}
+          x={interpX + battleOffsetX}
+          y={interpY + battleOffsetY}
           draw={drawFn}
         />
       );

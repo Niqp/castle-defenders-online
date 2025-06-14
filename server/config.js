@@ -14,7 +14,7 @@ export const WORKER_TYPES = {
   Rancher: { costs: { gold: 800 }, outputs: { food: 10 } },
 };
 export const UNIT_TYPES = {
-  Swordsman: { costs: { gold: 10, food: 10 }, hp: 30, dmg: 6, range: 40, speed: 3 },
+  Swordsman: { costs: { gold: 10, food: 10 }, hp: 50, dmg: 5, range: 40, speed: 3 },
   Archer: { costs: { gold: 200, food: 20 }, hp: 18, dmg: 4, range: 60, speed: 3 },
   Knight: { costs: { gold: 400, food: 40 }, hp: 50, dmg: 10, range: 40, speed: 3 },
 };
