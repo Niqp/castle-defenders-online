@@ -186,9 +186,10 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       let battleOffsetX = 0;
       if (meta?.inBattle) {
         const cycleMs = 1000; // server combat tick
-        const phase = ((now % cycleMs) / cycleMs); // 0 → 1
+        const rawPhase = ((now % cycleMs) / cycleMs); // 0 → 1 starting at tick
+        const approachPortion = 0.6; // 60% time forward
+        const phase = (rawPhase + approachPortion) % 1; // shift so contact aligns with tick
 
-        const approachPortion = 0.6; // 60% time moving forward
         const halfOffset = unitType === 'player' ? 0.25 : -0.25;
         // Direction based on actual horizontal position inside the cell
         const cellCenterX = Math.floor(target.x) + 0.5;
