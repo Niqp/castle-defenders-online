@@ -116,7 +116,8 @@ export class GameService {
       castleHp: this.gameState.castleHealth,
       players: this.gameState.players,
       workerTypes: WORKER_TYPES,
-      unitTypes: UNIT_TYPES
+      unitTypes: UNIT_TYPES,
+      enemyTypes: ENEMY_TYPES
     });
     // Start modular tickers with new state
     this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
@@ -223,6 +224,7 @@ export class GameService {
       players: this.gameState.players,
       workerTypes: WORKER_TYPES,
       unitTypes: UNIT_TYPES,
+      enemyTypes: ENEMY_TYPES,
       playerName,
       roomId: this.roomId,
       // Player-specific live resources at reconnect time
