@@ -11,9 +11,14 @@ export class CombatTicker {
   }
 
   start() {
-    this.intervalId = setInterval(() => {
+    const interval = TIMINGS.COUNTDOWN_INTERVAL;
+
+    const tick = () => {
       try {
-        // Move units
+        /*
+          ─── Phase 1 ───  (t = 0)
+          Handle movement and assign battles.  Units visually start their "combat bounce" now.
+        */
         Movement.moveEnemyUnits(this.gameState.grid, (enemy, col) => {
           // Enemy reached castle: apply damage and remove unit
           this.gameState.applyCastleDamage(enemy.damage || 10);
@@ -23,30 +28,56 @@ export class CombatTicker {
           // Player reached portal: just remove unit
           this.gameState.removeUnit(playerUnit);
         });
-        // Handle battles
+
+        // Check & mark battles but DO NOT apply damage yet – that will occur halfway through the interval
         Battle.checkAndStartBattles(this.gameState.grid);
-        Battle.processBattles(this.gameState.grid);
-        // Remove dead units
-        for (const unit of Array.from(this.gameState.units.values())) {
-          if (!unit.isAlive()) {
-            this.gameState.removeUnit(unit);
-          }
-        }
-        // Emit updated state
-        // Optionally, you can emit the full grid or just changed units
+
+        // Emit current grid state (after movement & new spawns) so clients display units immediately.
+        // HP values are still intact because damage hasn't been processed yet, so bars remain full until the
+        // mid-tick damage pass.
         this.io.emit(EVENTS.STATE_UPDATE, {
           castleHp: this.gameState.castleHealth,
-          grid: this.gameState.grid.cells
+          grid: JSON.parse(JSON.stringify(this.gameState.grid.cells))
         });
-        // Game over check
-        if (!this.gameState.isCastleAlive()) {
-          this.io.emit(EVENTS.GAME_OVER, { message: 'The castle has fallen!', stats: { wave: this.gameState.wave } });
-          this.stop();
-        }
+
+        /*
+          ─── Phase 2 ───  (t = interval / 2)
+          Apply damage exactly when units visually "touch" (half-way through the bounce animation).
+        */
+        setTimeout(() => {
+          try {
+            Battle.processBattles(this.gameState.grid);
+
+            // Remove dead units
+            for (const unit of Array.from(this.gameState.units.values())) {
+              if (!unit.isAlive()) {
+                this.gameState.removeUnit(unit);
+              }
+            }
+
+            // Emit updated state after damage has been applied
+            this.io.emit(EVENTS.STATE_UPDATE, {
+              castleHp: this.gameState.castleHealth,
+              grid: JSON.parse(JSON.stringify(this.gameState.grid.cells))
+            });
+
+            // Game-over check (after damage)
+            if (!this.gameState.isCastleAlive()) {
+              this.io.emit(EVENTS.GAME_OVER, { message: 'The castle has fallen!', stats: { wave: this.gameState.wave } });
+              this.stop();
+            }
+          } catch (err) {
+            console.error('CombatTicker damage phase error', err);
+          }
+        }, interval / 2);
       } catch (err) {
-        console.error('CombatTicker error', err);
+        console.error('CombatTicker movement phase error', err);
       }
-    }, TIMINGS.COUNTDOWN_INTERVAL);
+    };
+
+    // Run first tick immediately so game starts without delay
+    tick();
+    this.intervalId = setInterval(tick, interval);
   }
 
   stop() {

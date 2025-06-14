@@ -37,6 +37,9 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const moveTimeRef = useRef(new Map());           // id -> timestamp of last movement
   const battleEndTimeRef = useRef(new Map());      // id -> timestamp when battle ended
   const battleStartTimeRef = useRef(new Map());     // id -> timestamp when battle started
+  const battleReturnOffsetRef = useRef(new Map()); // id -> {x,y} offset at battle end
+  const hpPrevRatioRef = useRef(new Map());        // id -> previous hp ratio for tween
+  const hpAnimStartRef = useRef(new Map());        // id -> timestamp when hp began changing
 
   const SERVER_TICK_MS = 1000; // Matches CombatTicker interval
   const ANIM_MS = SERVER_TICK_MS; // movement tween equals tick duration
@@ -121,6 +124,38 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       const prevMeta = prevMetaSnapshot.get(id);
       if (prevMeta && prevMeta.inBattle && !newMeta.inBattle) {
         battleEndTimeRef.current.set(id, Date.now());
+
+        // Capture offset at battle end to ensure smooth return without snapping
+        const target = targetPosRef.current.get(id);
+        if (target) {
+          const unitType = prevMeta.type || (id.startsWith('enemy') ? 'enemy' : 'player');
+          const cycleMs = 1000;
+          const start = battleStartTimeRef.current.get(id) || Date.now();
+          const phase = (((Date.now() - start) % cycleMs) / cycleMs);
+
+          const halfOffset = unitType === 'player' ? 0.25 : -0.25;
+          const cellCenterX = Math.floor(target.x) + 0.5;
+          let dirX = 0;
+          if (Math.abs(target.x - cellCenterX) > 0.01) {
+            dirX = target.x < cellCenterX ? -1 : 1;
+          } else {
+            dirX = unitType === 'player' ? -1 : 1;
+          }
+          const curveAmp = 0.06;
+          let offY = 0;
+          let offX = 0;
+          if (phase < 0.5) {
+            const p = phase * 2;
+            const ease = 1 - Math.pow(1 - p, 1.5);
+            offY = -halfOffset * ease;
+            offX = curveAmp * Math.sin(Math.PI * ease) * dirX;
+          } else {
+            const p = (phase - 0.5) * 2;
+            offY = -halfOffset * (1 - p);
+            offX = 0;
+          }
+          battleReturnOffsetRef.current.set(id, { x: offX, y: offY });
+        }
       }
     }
 
@@ -146,7 +181,10 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         metaRef.current.delete(id);
         moveTimeRef.current.delete(id);
         battleEndTimeRef.current.delete(id);
+        battleReturnOffsetRef.current.delete(id);
         battleStartTimeRef.current.delete(id);
+        hpPrevRatioRef.current.delete(id);
+        hpAnimStartRef.current.delete(id);
       }
     }
 
@@ -200,7 +238,30 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       const interpY = prev.y + (target.y - prev.y) * localT;
       const radius = UNIT_RADIUS;
       const meta = metaRef.current.get(id);
-      const ratio = meta ? Math.max(0, meta.hp) / (meta.maxHp || 1) : 1;
+      const ratioTarget = meta ? Math.max(0, meta.hp) / (meta.maxHp || 1) : 1;
+      const nowRatioPrev = hpPrevRatioRef.current.get(id);
+      if (nowRatioPrev === undefined) {
+        hpPrevRatioRef.current.set(id, ratioTarget);
+      }
+      let ratioFrom = hpPrevRatioRef.current.get(id);
+      const animStartExisting = hpAnimStartRef.current.get(id);
+      if (!animStartExisting && ratioFrom > ratioTarget) {
+        // HP decreased – kick off animation only if not already animating
+        hpAnimStartRef.current.set(id, now);
+      }
+      const animStart = hpAnimStartRef.current.get(id);
+      let ratio = ratioTarget;
+      const HP_ANIM_MS = 400;
+      if (animStart && ratioFrom !== undefined && ratioFrom > ratioTarget) {
+        const t = Math.min(1, (now - animStart) / HP_ANIM_MS);
+        ratio = ratioFrom + (ratioTarget - ratioFrom) * t;
+        if (t === 1) {
+          hpPrevRatioRef.current.set(id, ratioTarget);
+          hpAnimStartRef.current.delete(id);
+        }
+      } else {
+        ratio = ratioTarget;
+      }
       const unitType = meta?.type || (id.startsWith('enemy') ? 'enemy' : 'player');
 
       // Battle animation: slow approach, fast curved retreat
@@ -243,16 +304,13 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         if (endTime) {
           const elapsed = now - endTime;
           if (elapsed < RETURN_MS) {
-            const halfOffset = unitType === 'player' ? 0.25 : -0.25;
-            const p = 1 - elapsed / RETURN_MS; // decays from 1→0
-            // Use same dirX determination
-            const cellCenterX = Math.floor(target.x) + 0.5;
-            const dirX = target.x < cellCenterX ? -1 : 1;
-            const curveAmp = 0.04;
-            battleOffsetY = -halfOffset * p;
-            battleOffsetX = curveAmp * Math.sin(Math.PI * p) * dirX;
+            const startOff = battleReturnOffsetRef.current.get(id) || { x: 0, y: 0 };
+            const p = 1 - elapsed / RETURN_MS; // 1 → 0
+            battleOffsetY = startOff.y * p;
+            battleOffsetX = startOff.x * p;
           } else {
             battleEndTimeRef.current.delete(id); // finished
+            battleReturnOffsetRef.current.delete(id);
           }
         }
       }
