@@ -36,6 +36,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const lastUpdateRef = useRef(Date.now());
 
   const ANIM_MS = 300; // duration of movement tween
+  // Constant circle radius (logical units) chosen small enough to fit many units per cell
+  const UNIT_RADIUS = 0.15;
 
   // local state counter to trigger re-render
   const [, setFrameTick] = React.useState(0);
@@ -71,12 +73,18 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         // helper to assign horizontal slots within half-cell
         const assignHalf = (arr, half) => {
           const count = arr.length;
+          if (!count) return;
+          // Available horizontal span inside the half-cell (±0.4 from centre)
+          const spacing = 0.8 / count;
+
           arr.forEach((unit, idx) => {
             const base = cellCenter(r, c);
             const yHalfOffset = half === 'top' ? -0.25 : 0.25;
-            const spacing = 0.8 / Math.max(count, 1); // total width ~0.8 logical units
-            const xOffset = (-0.4) + spacing * (idx + 0.5);
-            targets.set(unit.id, { x: base.x + xOffset, y: base.y + yHalfOffset });
+            const xOffset = -0.4 + spacing * (idx + 0.5);
+            targets.set(unit.id, {
+              x: base.x + xOffset,
+              y: base.y + yHalfOffset,
+            });
           });
         };
 
@@ -144,14 +152,14 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       const prev = prevPosRef.current.get(id) || target;
       const interpX = prev.x + (target.x - prev.x) * t;
       const interpY = prev.y + (target.y - prev.y) * t;
+      const radius = UNIT_RADIUS;
       const unitType = id.startsWith('enemy') ? 'enemy' : 'player'; // fallback if type unavailable
-      const unitData = { type: unitType }; // minimal for draw color.
 
       // circle draw
       const drawFn = (color) => (g) => {
         g.clear();
         g.beginFill(color);
-        g.drawCircle(0, 0, 0.3);
+        g.drawCircle(0, 0, radius);
         g.endFill();
       };
 

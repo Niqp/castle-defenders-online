@@ -2,7 +2,7 @@ export const PORT = process.env.PORT || 3001;
 export const CORS_ORIGIN = '*';
 export const TIMINGS = {
   WORKER_INTERVAL: 1000,
-  WAVE_INTERVAL: 60000,
+  WAVE_INTERVAL: 10000,
   COUNTDOWN_INTERVAL: 1000,
 };
 export const WORKER_TYPES = {
