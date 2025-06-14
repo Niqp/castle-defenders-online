@@ -190,7 +190,15 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
 
         const approachPortion = 0.6; // 60% time moving forward
         const halfOffset = unitType === 'player' ? 0.25 : -0.25;
-        const dirX = unitType === 'player' ? -1 : 1;
+        // Direction based on actual horizontal position inside the cell
+        const cellCenterX = Math.floor(target.x) + 0.5;
+        let dirX = 0;
+        if (Math.abs(target.x - cellCenterX) > 0.01) {
+          dirX = target.x < cellCenterX ? -1 : 1;
+        } else {
+          // fallback: player left, enemy right
+          dirX = unitType === 'player' ? -1 : 1;
+        }
         const curveAmp = 0.06; // horizontal curve on retreat
 
         if (phase < approachPortion) {
