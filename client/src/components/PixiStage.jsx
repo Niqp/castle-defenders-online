@@ -36,6 +36,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const metaRef = useRef(new Map());               // id -> {hp,maxHp,type}
   const moveTimeRef = useRef(new Map());           // id -> timestamp of last movement
   const battleEndTimeRef = useRef(new Map());      // id -> timestamp when battle ended
+  const battleStartTimeRef = useRef(new Map());     // id -> timestamp when battle started
 
   const SERVER_TICK_MS = 1000; // Matches CombatTicker interval
   const ANIM_MS = SERVER_TICK_MS; // movement tween equals tick duration
@@ -107,6 +108,14 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     const prevMetaSnapshot = new Map(metaRef.current);
     const newTargets = computeTargets();
 
+    // Detect battle start to initialise animation phase from 0
+    for (let [id, newMeta] of metaRef.current.entries()) {
+      const prevMeta = prevMetaSnapshot.get(id);
+      if (newMeta.inBattle && (!prevMeta || !prevMeta.inBattle)) {
+        battleStartTimeRef.current.set(id, Date.now());
+      }
+    }
+
     // Detect battle end to start retreat tween
     for (let [id, newMeta] of metaRef.current.entries()) {
       const prevMeta = prevMetaSnapshot.get(id);
@@ -137,6 +146,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         metaRef.current.delete(id);
         moveTimeRef.current.delete(id);
         battleEndTimeRef.current.delete(id);
+        battleStartTimeRef.current.delete(id);
       }
     }
 
@@ -200,7 +210,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
 
       if (meta?.inBattle) {
         const cycleMs = 1000; // server combat tick
-        const phase = ((now % cycleMs) / cycleMs); // 0 at tick, 0→1
+        const start = battleStartTimeRef.current.get(id) || now;
+        const phase = (((now - start) % cycleMs) / cycleMs); // 0 at battle start, loops 0→1
 
         const halfOffset = unitType === 'player' ? 0.25 : -0.25;
         // Direction based on actual horizontal position inside the cell
