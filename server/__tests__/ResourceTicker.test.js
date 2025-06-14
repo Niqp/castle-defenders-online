@@ -15,8 +15,8 @@ describe('ResourceTicker', () => {
     ];
     const ticker = new ResourceTicker(io, socketToName, players);
     ticker.tick();
-    expect(players[0].gold).toBeGreaterThan(0);
-    expect(players[1].gold).toBeGreaterThan(5);
+    expect(players[0].food).toBeGreaterThan(0);
+    expect(players[1].food).toBeGreaterThan(0);
     ticker.stop();
   });
 

@@ -1,5 +1,5 @@
 import { GameService } from '../services/GameService.js';
-jest.mock('../config.js', () => ({ TIMINGS: { WAVE_INTERVAL: 60000 } }));
+jest.mock('../config.js', () => ({ TIMINGS: { WAVE_INTERVAL: 60000 }, WORKER_TYPES: {}, UNIT_TYPES: {} }));
 jest.mock('../events.js', () => ({ EVENTS: { GAME_START: 'GAME_START' } }));
 
 jest.useFakeTimers();

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import PixiStage from './PixiStage';
 // Removed 'io' import as socketRef is passed as a prop
 
@@ -141,11 +141,22 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     };
   }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
 
-  const workerTypes = [
-    { type: 'Miner', cost: { gold: 50 }, current: workers.Miner },
-    { type: 'Digger', cost: { gold: 200 }, current: workers.Digger },
-    { type: 'Excavator', cost: { gold: 500 }, current: workers.Excavator },
-  ];
+  // Dynamically build worker type list based on server-provided config (fallback to legacy list)
+  const workerTypes = useMemo(() => {
+    if (gameState?.workerTypes) {
+      return Object.entries(gameState.workerTypes).map(([type, cfg]) => ({
+        type,
+        cost: { gold: cfg.cost },
+        current: workers[type] ?? 0
+      }));
+    }
+    // Fallback if server did not send workerTypes
+    return [
+      { type: 'Miner', cost: { gold: 50 }, current: workers.Miner },
+      { type: 'Digger', cost: { gold: 200 }, current: workers.Digger },
+      { type: 'Excavator', cost: { gold: 500 }, current: workers.Excavator },
+    ];
+  }, [gameState?.workerTypes, workers]);
 
   const unitTypes = [
     { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: playerUnits.Swordsman },
@@ -235,7 +246,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                   <div key={worker.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{worker.type} <span className="badge badge-neutral badge-sm">x{worker.current}</span></p>
-                      <p className="text-xs text-base-content/70">Cost: {worker.cost.gold}G</p>
+                      <p className="text-xs text-base-content/70">Cost: {Object.entries(worker.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}</p>
                     </div>
                     <button 
                       className="btn btn-secondary btn-sm" 
@@ -259,7 +270,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                   <div key={unit.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
                     <div>
                       <p className="font-semibold text-sm sm:text-base">{unit.type} <span className="badge badge-neutral badge-sm">x{unit.current}</span></p>
-                      <p className="text-xs text-base-content/70">Cost: {unit.cost.gold}G / {unit.cost.food}F</p>
+                      <p className="text-xs text-base-content/70">Cost: {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}</p>
                     </div>
                     <button 
                       className="btn btn-accent btn-sm" 

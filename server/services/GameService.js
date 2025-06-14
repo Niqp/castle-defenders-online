@@ -110,7 +110,8 @@ export class GameService {
     this.io.in(this.roomId).emit(EVENTS.GAME_START, {
       wave: this.gameState.wave,
       castleHp: this.gameState.castleHealth,
-      players: this.gameState.players
+      players: this.gameState.players,
+      workerTypes: WORKER_TYPES
     });
     // Start modular tickers with new state
     this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);

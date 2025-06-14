@@ -5,11 +5,20 @@ export class ResourceTicker {
   tick() {
     try {
       this.players.forEach(p => {
-        const income = Object.entries(WORKER_TYPES)
-          .reduce((sum, [k, v]) => sum + (p.workers && p.workers[k] ? p.workers[k] * v.output : 0), 0);
-        const foodIncome = (p.workers && p.workers.Farmer ? p.workers.Farmer * WORKER_TYPES.Farmer.output : 0);
-        p.gold = (p.gold || 0) + income;
-        p.food = (p.food || 0) + foodIncome;
+        const incomeMap = {};
+        for (const [type, config] of Object.entries(WORKER_TYPES)) {
+          const count = (p.workers && p.workers[type]) ? p.workers[type] : 0;
+          if (!count) continue;
+          // Support both new `outputs` object and legacy `output` + `resource` fields for backward compatibility
+          const outputs = config.outputs || (config.output !== undefined ? { [config.resource || 'gold']: config.output } : {});
+          for (const [res, amount] of Object.entries(outputs)) {
+            incomeMap[res] = (incomeMap[res] || 0) + count * amount;
+          }
+        }
+        // Apply incomes to player
+        for (const [res, amount] of Object.entries(incomeMap)) {
+          p[res] = (p[res] || 0) + amount;
+        }
         for (let [id, name] of this.socketToName.entries()) {
           if (name === p.name) {
             this.io.to(id).emit(EVENTS.RESOURCE_UPDATE, {
@@ -36,11 +45,18 @@ export class ResourceTicker {
     this.intervalId = setInterval(() => {
       try {
         this.players.forEach(p => {
-          const income = Object.entries(WORKER_TYPES)
-            .reduce((sum, [k, v]) => sum + (p.workers[k] || 0) * v.output, 0);
-          const foodIncome = (p.workers.Farmer || 0) * WORKER_TYPES.Farmer.output;
-          p.gold += income;
-          p.food += foodIncome;
+          const incomeMap = {};
+          for (const [type, config] of Object.entries(WORKER_TYPES)) {
+            const count = p.workers[type] || 0;
+            if (!count) continue;
+            const outputs = config.outputs || (config.output !== undefined ? { [config.resource || 'gold']: config.output } : {});
+            for (const [res, amount] of Object.entries(outputs)) {
+              incomeMap[res] = (incomeMap[res] || 0) + count * amount;
+            }
+          }
+          for (const [res, amt] of Object.entries(incomeMap)) {
+            p[res] = (p[res] || 0) + amt;
+          }
           for (let [id, name] of this.socketToName.entries()) {
             if (name === p.name) {
               this.io.to(id).emit(EVENTS.RESOURCE_UPDATE, {
@@ -62,3 +78,4 @@ export class ResourceTicker {
     clearInterval(this.intervalId);
   }
 }
+
