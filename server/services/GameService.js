@@ -111,7 +111,8 @@ export class GameService {
       wave: this.gameState.wave,
       castleHp: this.gameState.castleHealth,
       players: this.gameState.players,
-      workerTypes: WORKER_TYPES
+      workerTypes: WORKER_TYPES,
+      unitTypes: UNIT_TYPES
     });
     // Start modular tickers with new state
     this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
@@ -138,9 +139,15 @@ export class GameService {
     if (!req) return;
     const player = this._getPlayer(socket);
     if (!player) return;
-    if ((player.gold || 0) < req.cost) return;
-    player.gold -= req.cost;
-    // Ensure player.workers is always an object
+    const costs = req.costs || { gold: req.cost ?? req.gold ?? 0, food: req.food ?? 0 };
+    // ensure player has all resources
+    for (const [res, amt] of Object.entries(costs)) {
+      if ((player[res] || 0) < amt) return; // insufficient
+    }
+    // deduct resources
+    for (const [res, amt] of Object.entries(costs)) {
+      player[res] = (player[res] || 0) - amt;
+    }
     if (category === 'workers') {
       if (typeof player.workers !== 'object' || player.workers === null) {
         player.workers = Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0]));

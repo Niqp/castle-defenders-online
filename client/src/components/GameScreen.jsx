@@ -146,7 +146,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     if (gameState?.workerTypes) {
       return Object.entries(gameState.workerTypes).map(([type, cfg]) => ({
         type,
-        cost: { gold: cfg.cost },
+        cost: cfg.costs ?? { gold: cfg.cost ?? 0 },
         current: workers[type] ?? 0
       }));
     }
@@ -158,11 +158,28 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     ];
   }, [gameState?.workerTypes, workers]);
 
-  const unitTypes = [
-    { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: playerUnits.Swordsman },
-    { type: 'Archer', cost: { gold: 150, food: 15 }, current: playerUnits.Archer },
-    { type: 'Knight', cost: { gold: 300, food: 30 }, current: playerUnits.Knight },
-  ];
+  const unitTypes = useMemo(() => {
+    if (gameState?.unitTypes) {
+      return Object.entries(gameState.unitTypes).map(([type, cfg]) => ({
+        type,
+        cost: cfg.costs ?? { gold: cfg.gold ?? 0, food: cfg.food ?? 0 },
+        current: playerUnits[type] ?? 0
+      }));
+    }
+    return [
+      { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: playerUnits.Swordsman },
+      { type: 'Archer', cost: { gold: 150, food: 15 }, current: playerUnits.Archer },
+      { type: 'Knight', cost: { gold: 300, food: 30 }, current: playerUnits.Knight },
+    ];
+  }, [gameState?.unitTypes, playerUnits]);
+
+  const canAfford = (cost) => {
+    return Object.entries(cost).every(([res, val]) => {
+      if (res === 'gold') return gold >= val;
+      if (res === 'food') return food >= val;
+      return true; // Unknown resources assumed unlimited for now
+    });
+  };
 
   return (
     <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content">
@@ -251,7 +268,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <button 
                       className="btn btn-secondary btn-sm" 
                       onClick={() => handleHireWorker(worker.type)}
-                      disabled={gold < worker.cost.gold}
+                      disabled={!canAfford(worker.cost)}
                     >
                       Hire
                     </button>
@@ -275,7 +292,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <button 
                       className="btn btn-accent btn-sm" 
                       onClick={() => handleSpawnUnit(unit.type)}
-                      disabled={gold < unit.cost.gold || food < unit.cost.food}
+                      disabled={!canAfford(unit.cost)}
                     >
                       Spawn
                     </button>
