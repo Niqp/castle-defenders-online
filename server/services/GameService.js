@@ -73,8 +73,9 @@ export class GameService {
         maxHealth: req.hp,
         damage: req.dmg
       };
-      // Use gameState.grid and add to global units map
-      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, selectedCol);
+      // Use gameState.grid and add to global units map. Pass owner & unitType so that
+      // clients can later attribute units correctly for per-player alive counters.
+      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, selectedCol, player.name, type);
       this.gameState.addUnit(unit);
       // Optionally, emit new unit state to client(s)
       this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });

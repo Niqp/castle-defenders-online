@@ -13,11 +13,11 @@ function spawnEnemyUnit(grid, enemyConfig) {
 }
 
 // Spawns a player unit at the selected column in the second row from the bottom
-function spawnPlayerUnit(grid, playerConfig, selectedCol) {
+function spawnPlayerUnit(grid, playerConfig, selectedCol, owner, unitType) {
   const row = grid.rows - 1; // Castle row
   const col = selectedCol;
   if (col < 0 || col >= grid.columns) throw new Error('Invalid column for player spawn');
-  const playerUnit = new PlayerUnit({ ...playerConfig, row, col });
+  const playerUnit = new PlayerUnit({ ...playerConfig, row, col, owner, unitType });
   playerUnit.justSpawned = true;
   grid.addUnitToCell(row, col, playerUnit);
   return playerUnit;

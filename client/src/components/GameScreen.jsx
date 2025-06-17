@@ -158,29 +158,6 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     ];
   }, [gameState?.workerTypes, workers]);
 
-  const unitTypes = useMemo(() => {
-    if (gameState?.unitTypes) {
-      return Object.entries(gameState.unitTypes).map(([type, cfg]) => ({
-        type,
-        cost: cfg.costs ?? { gold: cfg.gold ?? 0, food: cfg.food ?? 0 },
-        current: playerUnits[type] ?? 0
-      }));
-    }
-    return [
-      { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: playerUnits.Swordsman },
-      { type: 'Archer', cost: { gold: 150, food: 15 }, current: playerUnits.Archer },
-      { type: 'Knight', cost: { gold: 300, food: 30 }, current: playerUnits.Knight },
-    ];
-  }, [gameState?.unitTypes, playerUnits]);
-
-  const canAfford = (cost) => {
-    return Object.entries(cost).every(([res, val]) => {
-      if (res === 'gold') return gold >= val;
-      if (res === 'food') return food >= val;
-      return true; // Unknown resources assumed unlimited for now
-    });
-  };
-
   /* --------------------------
    * Column selection state   
    * -------------------------- */
@@ -195,6 +172,52 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   useEffect(() => {
     setSelectedCol(prev => Math.min(prev, Math.max(0, cols - 1)));
   }, [cols]);
+
+  /* -------------------------------------------------
+   * Derived state: alive units belonging to this player
+   * -------------------------------------------------
+   */
+  const aliveUnitCounts = useMemo(() => {
+    const counts = {};
+    if (!Array.isArray(grid) || !playerName) return counts;
+    for (const row of grid) {
+      if (!Array.isArray(row)) continue;
+      for (const cell of row) {
+        const unitsInCell = Array.isArray(cell) ? cell : (cell ? [cell] : []);
+        for (const u of unitsInCell) {
+          if (u && u.type === 'player' && u.owner === playerName) {
+            const key = u.unitType || 'Unknown';
+            counts[key] = (counts[key] || 0) + 1;
+          }
+        }
+      }
+    }
+    return counts;
+  }, [grid, playerName]);
+
+  const unitTypes = useMemo(() => {
+    const getCurrent = (type) => aliveUnitCounts[type] ?? playerUnits[type] ?? 0;
+    if (gameState?.unitTypes) {
+      return Object.entries(gameState.unitTypes).map(([type, cfg]) => ({
+        type,
+        cost: cfg.costs ?? { gold: cfg.gold ?? 0, food: cfg.food ?? 0 },
+        current: getCurrent(type)
+      }));
+    }
+    return [
+      { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: getCurrent('Swordsman') },
+      { type: 'Archer', cost: { gold: 150, food: 15 }, current: getCurrent('Archer') },
+      { type: 'Knight', cost: { gold: 300, food: 30 }, current: getCurrent('Knight') },
+    ];
+  }, [gameState?.unitTypes, playerUnits, aliveUnitCounts]);
+
+  const canAfford = (cost) => {
+    return Object.entries(cost).every(([res, val]) => {
+      if (res === 'gold') return gold >= val;
+      if (res === 'food') return food >= val;
+      return true; // Unknown resources assumed unlimited for now
+    });
+  };
 
   return (
     <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content">
@@ -353,7 +376,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <div className="space-y-1 mt-2 text-sm sm:text-base">
                 <div className="flex justify-between"><span>Current Wave:</span> <span className="font-semibold text-info">{wave}</span></div>
                 <div className="flex justify-between"><span>Castle Health:</span> <span className="font-semibold text-error">{castleHp}/{MAX_CASTLE_HP}</span></div>
-                <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(playerUnits).reduce((a, b) => a + b, 0)}</span></div>
+                <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(aliveUnitCounts).reduce((a, b) => a + b, 0)}</span></div>
               </div>
             </div>
           </div>
