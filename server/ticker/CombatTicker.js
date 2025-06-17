@@ -20,8 +20,8 @@ export class CombatTicker {
           Handle movement and assign battles.  Units visually start their "combat bounce" now.
         */
         Movement.moveEnemyUnits(this.gameState.grid, (enemy, col) => {
-          // Enemy reached castle: apply damage and remove unit
-          this.gameState.applyCastleDamage(enemy.damage || 10);
+          // Enemy reached castle: apply damage to the owner of this column and remove unit
+          this.gameState.applyCastleDamage(col, enemy.damage || 10);
           this.gameState.removeUnit(enemy);
         });
         Movement.movePlayerUnits(this.gameState.grid, (playerUnit, col) => {
@@ -62,8 +62,8 @@ export class CombatTicker {
             });
 
             // Game-over check (after damage)
-            if (!this.gameState.isCastleAlive()) {
-              this.io.emit(EVENTS.GAME_OVER, { message: 'The castle has fallen!', stats: { wave: this.gameState.wave } });
+            if (!this.gameState.areAnyCastlesAlive()) {
+              this.io.emit(EVENTS.GAME_OVER, { message: 'All castles have fallen!', stats: { wave: this.gameState.wave } });
               this.stop();
             }
           } catch (err) {

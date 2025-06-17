@@ -1,11 +1,11 @@
 import { WaveSpawner } from '../ticker/WaveSpawner.js';
+import GameState from '../game/GameState.js';
 
 describe('WaveSpawner', () => {
   it('spawns correct number of enemies for a wave', () => {
     const io = { emit: jest.fn() };
-    // Mock grid with addUnitToCell
-    const grid = { columns: 5, addUnitToCell: jest.fn() };
-    const gameState = { wave: 2, addUnit: jest.fn(), grid };
+    const gameState = new GameState(['A','B']);
+    gameState.wave = 2;
     const spawner = new WaveSpawner(io, gameState);
     const enemies = spawner.spawnWave();
     const expected = 3 + gameState.wave;

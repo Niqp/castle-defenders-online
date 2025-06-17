@@ -20,6 +20,11 @@ export class WaveSpawner {
       const newEnemies = [];
       const enemyTypeKeys = Object.keys(ENEMY_TYPES);
       const enemyTypesArr = enemyTypeKeys.length ? enemyTypeKeys : ['basic'];
+      const aliveCols = this.gameState.getAliveColumns();
+      if (!aliveCols.length) {
+        // No living players – nothing to spawn
+        return [];
+      }
       for (let i = 0; i < num; i++) {
         const enemyType = enemyTypesArr[(this.gameState.wave + i) % enemyTypesArr.length];
         const def = ENEMY_TYPES[enemyType] || { baseHealth: 10, baseDamage: 2 };
@@ -28,7 +33,9 @@ export class WaveSpawner {
           damage: def.baseDamage + Math.floor(this.gameState.wave / 2),
           subtype: enemyType,
         };
-        const enemy = spawnEnemyUnit(this.gameState.grid, enemyConfig);
+        // Choose a random alive column to spawn this enemy
+        const col = aliveCols[Math.floor(Math.random() * aliveCols.length)];
+        const enemy = spawnEnemyUnit(this.gameState.grid, enemyConfig, col);
         this.gameState.addUnit(enemy);
         newEnemies.push(enemy);
       }

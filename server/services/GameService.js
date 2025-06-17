@@ -51,10 +51,14 @@ export class GameService {
   }
 
   mine(socket) {
+    const name = this.socketToName.get(socket.id);
+    if (!this.gameState?.isPlayerAlive(name)) return; // eliminated players cannot act
     this._modifyResource(socket, 'gold', 1);
   }
 
   hireWorker(socket, type) {
+    const name = this.socketToName.get(socket.id);
+    if (!this.gameState?.isPlayerAlive(name)) return;
     const req = WORKER_TYPES[type];
     this._purchase(socket, req, 'workers', type);
   }
@@ -65,21 +69,23 @@ export class GameService {
    * @param {string} type - Unit type key
    * @param {number} selectedCol - The column (lane) to spawn the unit in
    */
-  spawnUnit(socket, type, selectedCol = 0) {
+  spawnUnit(socket, type, selectedCol = null) {
+    const name = this.socketToName.get(socket.id);
+    if (!this.gameState?.isPlayerAlive(name)) return;
+
+    // Default lane to the player's own column if not provided
+    const defaultCol = this.gameState?.playerToCol[name] ?? 0;
+    const colToUse = selectedCol !== null ? selectedCol : defaultCol;
+
     const req = UNIT_TYPES[type];
     this._purchase(socket, req, 'units', type, (player) => {
-      // Use new grid/unit system
       const playerConfig = {
         maxHealth: req.hp,
         damage: req.dmg
       };
-      // Use gameState.grid and add to global units map. Pass owner & unitType so that
-      // clients can later attribute units correctly for per-player alive counters.
-      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, selectedCol, player.name, type);
+      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, colToUse, player.name, type);
       this.gameState.addUnit(unit);
-      // Optionally, emit new unit state to client(s)
       this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });
-      // Send immediate grid update so clients render the unit without waiting for next tick
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
         grid: this.gameState.grid.cells
       });
@@ -98,7 +104,7 @@ export class GameService {
   startGame() {
     this._clearIntervals();
     // Use new GameState with grid and castle health
-    this.gameState = new GameState(this.lobby.players.length, undefined, undefined, 1000);
+    this.gameState = new GameState([...this.lobby.players], undefined, 1000);
     // Initialize player objects for resource tracking (legacy compatibility)
     this.gameState.players = this.lobby.players.map(name => ({
       name,

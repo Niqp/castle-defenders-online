@@ -4,16 +4,18 @@ import EnemyUnit from '../units/EnemyUnit.js';
 import PlayerUnit from '../units/PlayerUnit.js';
 
 describe('GameState', () => {
-  it('initializes with correct player count, grid, and castle health', () => {
-    const gs = new GameState(4, 12, 4, 500);
+  it('initializes with per-player castle HP and proper grid', () => {
+    const players = ['Alice', 'Bob'];
+    const gs = new GameState(players, 12, 200);
     expect(gs.grid).toBeInstanceOf(Grid);
-    expect(gs.playerCount).toBe(4);
-    expect(gs.castleHealth).toBe(500);
-    expect(gs.units.size).toBe(0);
+    expect(gs.playerCount).toBe(players.length);
+    players.forEach((p) => {
+      expect(gs.castleHealth[p]).toBe(200);
+    });
   });
 
   it('adds and removes units from the state', () => {
-    const gs = new GameState(3);
+    const gs = new GameState(['P1','P2','P3']);
     const unit = new EnemyUnit({ maxHealth: 10, damage: 2, row: 1, col: 1 });
     gs.addUnit(unit);
     expect(gs.units.has(unit.id)).toBe(true);
@@ -21,12 +23,15 @@ describe('GameState', () => {
     expect(gs.units.has(unit.id)).toBe(false);
   });
 
-  it('applies castle damage and checks for alive state', () => {
-    const gs = new GameState(2, 12, 2, 100);
-    gs.applyCastleDamage(30);
-    expect(gs.castleHealth).toBe(70);
-    gs.applyCastleDamage(100);
-    expect(gs.castleHealth).toBe(0);
-    expect(gs.isCastleAlive()).toBe(false);
+  it('applies column-specific castle damage and alive checks', () => {
+    const players=['A','B'];
+    const gs = new GameState(players, 12, 100);
+    gs.applyCastleDamage(1,30); // column 1 belongs to player B
+    expect(gs.castleHealth['B']).toBe(70);
+    expect(gs.castleHealth['A']).toBe(100);
+    gs.applyCastleDamage(1,100);
+    expect(gs.castleHealth['B']).toBe(0);
+    expect(gs.isPlayerAlive('B')).toBe(false);
+    expect(gs.areAnyCastlesAlive()).toBe(true);
   });
 });

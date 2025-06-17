@@ -2,10 +2,10 @@
 import EnemyUnit from '../units/EnemyUnit.js';
 import PlayerUnit from '../units/PlayerUnit.js';
 
-// Spawns an enemy in a random column at the second row from the top
-function spawnEnemyUnit(grid, enemyConfig) {
+// Spawns an enemy at a specified column (random if not provided) in the portal row.
+function spawnEnemyUnit(grid, enemyConfig, specifiedCol = null) {
   const row = 0; // Portal row
-  const col = Math.floor(Math.random() * grid.columns);
+  const col = specifiedCol !== null ? specifiedCol : Math.floor(Math.random() * grid.columns);
   const enemy = new EnemyUnit({ ...enemyConfig, row, col });
   enemy.justSpawned = true;
   grid.addUnitToCell(row, col, enemy);

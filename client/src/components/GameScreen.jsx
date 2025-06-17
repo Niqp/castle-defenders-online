@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import PixiStage from './PixiStage';
+import Loading from './Loading.jsx';
 // Removed 'io' import as socketRef is passed as a prop
 
 // ENEMY_COLORS might be used by PixiStage or game logic, keeping it for now.
@@ -25,8 +26,13 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const [nextWaveIn, setNextWaveIn] = useState(gameState?.nextWaveIn ?? 60); // Default to 60s
   const lastWaveUpdateRef = useRef(Date.now());
   const lastWaveValueRef = useRef(gameState?.nextWaveIn ?? 60);
-  const [castleHp, setCastleHp] = useState(gameState?.castleHp ?? 1000);
-  const MAX_CASTLE_HP = 1000; // Define max HP for progress bar calculation
+  const [castleHp, setCastleHp] = useState(
+    typeof gameState?.castleHp === 'object' ? gameState.castleHp : { [playerName]: gameState?.castleHp ?? 1000 }
+  );
+  const MAX_CASTLE_HP = 1000; // TODO: optionally fetch from server
+
+  // Derived flag: is this local player still alive?
+  const playerAlive = (castleHp[playerName] ?? 0) > 0;
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -49,7 +55,9 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
         lastWaveValueRef.current = data.nextWaveIn; // Ensure animation resets correctly
         lastWaveUpdateRef.current = Date.now();
       }
-      if (data.castleHp !== undefined) setCastleHp(data.castleHp);
+      if (data.castleHp !== undefined) {
+        setCastleHp(typeof data.castleHp === 'object' ? data.castleHp : { [playerName]: data.castleHp });
+      }
       if (data.grid) setGrid(data.grid);
     });
     socket.on('spawnEnemies', (data) => {
@@ -106,10 +114,10 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     return () => cancelAnimationFrame(rafId);
   }, [nextWaveIn]);
 
-  const castleHpPercentage = Math.max(0, Math.min(100, (castleHp / MAX_CASTLE_HP) * 100));
+  const castleHpPercentage = Math.max(0, Math.min(100, ((castleHp[playerName] ?? 0) / MAX_CASTLE_HP) * 100));
 
   const pixiContainerRef = useRef(null);
-  const [pixiDimensions, setPixiDimensions] = useState({ width: 800, height: 450 }); // Default 16:9, will be updated by ResizeObserver
+  const [pixiDimensions, setPixiDimensions] = useState({ width: 0, height: 0 }); // Will be set by ResizeObserver
 
   useEffect(() => {
     const targetElement = pixiContainerRef.current;
@@ -133,6 +141,13 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     });
 
     resizeObserver.observe(targetElement);
+
+    // Kick-start with current rect so we don't rely solely on observer callbacks (some
+    // browsers may batch them). This guarantees PixiStage appears at least once.
+    const rect = targetElement.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      setPixiDimensions({ width: rect.width, height: rect.height });
+    }
 
     // Clean up observer on component unmount
     return () => {
@@ -166,12 +181,31 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     return 1;
   }, [grid]);
 
-  const [selectedCol, setSelectedCol] = useState(0);
+  // Determine this player's default lane based on join order (index in players list) or 0.
+  const initialPlayerCol = useMemo(() => {
+    if (Array.isArray(gameState?.players)) {
+      const idx = gameState.players.findIndex(p => (p.name || p) === playerName);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
+  }, [gameState?.players, playerName]);
+
+  const [selectedCol, setSelectedCol] = useState(initialPlayerCol);
 
   // Keep selected column within bounds whenever grid changes
   useEffect(() => {
     setSelectedCol(prev => Math.min(prev, Math.max(0, cols - 1)));
   }, [cols]);
+
+  // Update selectedCol if player lane changed (e.g., new game start)
+  useEffect(() => {
+    setSelectedCol(prev => {
+      // If user has manually selected a lane (differs from prev and not equal to old default?), we respect their choice.
+      // Only auto-set when prev equals old initialPlayerCol (meaning untouched) to avoid overriding manual changes.
+      if (prev === initialPlayerCol) return initialPlayerCol;
+      return prev;
+    });
+  }, [initialPlayerCol]);
 
   /* -------------------------------------------------
    * Derived state: alive units belonging to this player
@@ -219,6 +253,10 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     });
   };
 
+  // Readiness flags
+  const gridReady = useMemo(() => Array.isArray(grid) && grid.length && Array.isArray(grid[0]), [grid]);
+  const stageReady = gridReady && pixiDimensions.width > 0 && pixiDimensions.height > 0;
+
   return (
     <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content">
       {/* Header Navbar */}
@@ -252,24 +290,35 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
           <div className="flex items-center space-x-2 w-full">
             <span className="text-sm hidden sm:inline">Castle HP:</span>
             <progress className="progress progress-error flex-grow sm:w-32" value={castleHpPercentage} max="100"></progress>
-            <span className="text-xs sm:text-sm">{castleHp}/{MAX_CASTLE_HP}</span>
+            <span className="text-xs sm:text-sm">{castleHp[playerName] ?? 0}/{MAX_CASTLE_HP}</span>
           </div>
         </div>
         </div>
       </div>
+
+      {!playerAlive && (
+        <div className="alert alert-warning shadow-lg rounded-none text-center">
+          <span>You have been eliminated – you are now spectating.</span>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-grow flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 gap-2 sm:gap-4">
         {/* Game Canvas */}
         <div className="min-h-[clamp(200px,40vh,350px)] flex-grow lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-hidden flex p-1 sm:p-2">
           <div ref={pixiContainerRef} className="relative w-full h-full">
-            {pixiDimensions.width > 0 && pixiDimensions.height > 0 && (
+            {stageReady && (
               <PixiStage
                 key={`${pixiDimensions.width}-${pixiDimensions.height}`}
                 width={pixiDimensions.width}
                 height={pixiDimensions.height}
                 grid={grid}
               />
+            )}
+            {!stageReady && (
+              <div className="absolute inset-0 flex items-center justify-center bg-base-300">
+                <Loading message="Synchronising with server…" />
+              </div>
             )}
           </div>
         </div>
@@ -284,6 +333,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <button 
                 className="btn btn-primary btn-sm sm:btn-md w-full mt-2" 
                 onClick={handleMine}
+                disabled={!playerAlive}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm2 2a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm-2 5a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd" /></svg>
                 Mine Gold
@@ -306,7 +356,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <button 
                       className="btn btn-secondary btn-sm" 
                       onClick={() => handleHireWorker(worker.type)}
-                      disabled={!canAfford(worker.cost)}
+                      disabled={!playerAlive || !canAfford(worker.cost)}
                     >
                       Hire
                     </button>
@@ -330,7 +380,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <button 
                       className="btn btn-accent btn-sm" 
                       onClick={() => handleSpawnUnit(unit.type)}
-                      disabled={!canAfford(unit.cost)}
+                      disabled={!playerAlive || !canAfford(unit.cost)}
                     >
                       Spawn
                     </button>
@@ -350,6 +400,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                           key={idx}
                           className={`btn btn-xs sm:btn-sm flex-1 ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
                           onClick={() => setSelectedCol(idx)}
+                          disabled={!playerAlive}
                         >{idx + 1}</button>
                       ))}
                     </div>
@@ -362,6 +413,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                       value={selectedCol}
                       onChange={(e) => setSelectedCol(Number(e.target.value))}
                       className="range range-accent range-xs"
+                      disabled={!playerAlive}
                     />
                   )}
                 </div>
@@ -375,8 +427,18 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <h3 className="card-title text-md sm:text-lg">Battle Info</h3>
               <div className="space-y-1 mt-2 text-sm sm:text-base">
                 <div className="flex justify-between"><span>Current Wave:</span> <span className="font-semibold text-info">{wave}</span></div>
-                <div className="flex justify-between"><span>Castle Health:</span> <span className="font-semibold text-error">{castleHp}/{MAX_CASTLE_HP}</span></div>
+                <div className="flex justify-between"><span>Castle Health:</span> <span className="font-semibold text-error">{castleHp[playerName] ?? 0}/{MAX_CASTLE_HP}</span></div>
                 <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(aliveUnitCounts).reduce((a, b) => a + b, 0)}</span></div>
+              </div>
+              <hr className="my-1 opacity-50" />
+              <div className="space-y-1">
+                {Object.entries(castleHp).map(([name, hp]) => (
+                  <div key={name} className="flex justify-between items-center text-xs sm:text-sm">
+                    <span className={`truncate mr-1 ${name===playerName ? 'font-bold' : ''}`}>{name}</span>
+                    <progress className="progress progress-error flex-grow mx-1" value={hp} max={MAX_CASTLE_HP}></progress>
+                    <span className="ml-1">{hp}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -386,3 +448,4 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     </div>
   );
 }
+

@@ -10,7 +10,7 @@ describe('CombatTicker', () => {
   });
   it('can be constructed and stopped without error', () => {
     const io = { emit: jest.fn() };
-    const gameState = new GameState(1);
+    const gameState = new GameState(['Tester']);
     const ticker = new CombatTicker(io, gameState);
     expect(ticker).toBeDefined();
     ticker.stop();
