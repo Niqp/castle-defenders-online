@@ -14,16 +14,16 @@ export const WORKER_TYPES = {
   Rancher: { costs: { gold: 800 }, outputs: { food: 10 } },
 };
 export const UNIT_TYPES = {
-  Swordsman: { costs: { gold: 10, food: 10 }, hp: 50, dmg: 5, range: 40, speed: 3 },
-  Archer: { costs: { gold: 200, food: 20 }, hp: 18, dmg: 4, range: 60, speed: 3 },
-  Knight: { costs: { gold: 400, food: 40 }, hp: 50, dmg: 10, range: 40, speed: 3 },
+  Swordsman: { costs: { gold: 10, food: 10 }, hp: 50, dmg: 5, range: 40, speed: 3, sprite: 'swordsman.png' },
+  Archer: { costs: { gold: 200, food: 20 }, hp: 18, dmg: 4, range: 60, speed: 3, sprite: 'archer.png' },
+  Knight: { costs: { gold: 400, food: 40 }, hp: 50, dmg: 10, range: 40, speed: 3, sprite: 'knight.png' },
 };
 // Enemy type definitions. Feel free to add new entries or tweak stats.
 // color is forwarded to the client for future visual customisation but not yet in use.
 export const ENEMY_TYPES = {
-  goblin: { baseHealth: 50, baseDamage: 2, color: 0x44ee44 },
-  orc:    { baseHealth: 70, baseDamage: 4, color: 0x888888 },
-  troll:  { baseHealth: 100, baseDamage: 6, color: 0x9966cc },
+  goblin: { baseHealth: 50, baseDamage: 2, color: 0x44ee44, sprite: 'goblin.png' },
+  orc:    { baseHealth: 70, baseDamage: 4, color: 0x888888, sprite: 'orc.png' },
+  troll:  { baseHealth: 100, baseDamage: 6, color: 0x9966cc, sprite: 'ogre.png' },
 };
 
 // How long (in ms) we keep a clientId mapping without activity before it is purged.

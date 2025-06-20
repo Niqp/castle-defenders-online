@@ -1,8 +1,26 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { Application, extend } from '@pixi/react';
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, Assets } from 'pixi.js';
 
-extend({ Container, Graphics });
+// Import sprite images (player + enemy)
+import swordsmanImg from '../sprites/units/swordsman.png';
+import archerImg from '../sprites/units/archer.png';
+import knightImg from '../sprites/units/knight.png';
+
+import goblinImg from '../sprites/units/goblin.png';
+import orcImg from '../sprites/units/orc.png';
+import ogreImg from '../sprites/units/ogre.png';
+
+const SPRITE_URLS = {
+  swordsman: swordsmanImg,
+  archer: archerImg,
+  knight: knightImg,
+  goblin: goblinImg,
+  orc: orcImg,
+  troll: ogreImg,
+};
+
+extend({ Container, Graphics, Sprite });
 
 /******************************
  * Utility helpers            *
@@ -94,7 +112,18 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
               x: base.x + xOffset,
               y: base.y + yHalfOffset,
             });
-            meta.set(unit.id, { hp: unit.health, maxHp: unit.maxHealth, type: unit.type, inBattle: cellInBattle });
+            // Determine sprite key based on player unitType or enemy subtype (lowercase)
+            const spriteKey = unit.type === 'player'
+              ? (unit.unitType || '').toLowerCase()
+              : (unit.subtype || '').toLowerCase();
+
+            meta.set(unit.id, {
+              hp: unit.health,
+              maxHp: unit.maxHealth,
+              type: unit.type,
+              inBattle: cellInBattle,
+              spriteKey,
+            });
           });
         };
 
@@ -315,12 +344,9 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         }
       }
 
-      const drawFn = (g) => {
+      // HP bar graphics drawer (without the unit circle)
+      const drawHpBar = (g) => {
         g.clear();
-        // Draw circle
-        g.beginFill(unitType === 'enemy' ? 0xff5555 : 0x44bbee);
-        g.drawCircle(0, 0, radius);
-        g.endFill();
 
         // Draw HP bar background
         const barWidth = radius * 2;
@@ -336,13 +362,20 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         g.endFill();
       };
 
+      const spriteTexture = textures[meta?.spriteKey] || textures[unitType === 'enemy' ? 'goblin' : 'swordsman'];
+
+      const baseSize = (spriteTexture?.width ?? 64);
+      const spriteScale = (radius * 2) / baseSize; // logical units
+
       elements.push(
-        <pixiGraphics
-          key={id}
-          x={interpX + battleOffsetX}
-          y={interpY + battleOffsetY}
-          draw={drawFn}
-        />
+        <pixiContainer key={id} x={interpX + battleOffsetX} y={interpY + battleOffsetY}>
+          <pixiSprite
+            texture={spriteTexture}
+            scale={spriteScale}
+            anchor={0.5}
+          />
+          <pixiGraphics draw={drawHpBar} />
+        </pixiContainer>
       );
 
       // when animation complete update prevPos
@@ -352,6 +385,28 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     }
     return elements;
   };
+
+  const [textures, setTextures] = useState(null);
+
+  // Load textures once on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await Assets.load(Object.values(SPRITE_URLS));
+      if (cancelled) return;
+      const map = {};
+      for (const [key, url] of Object.entries(SPRITE_URLS)) {
+        map[key] = Assets.get(url);
+      }
+      setTextures(map);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!textures) {
+    // Optionally render nothing until textures are ready
+    return null;
+  }
 
   return (
     <Application width={width} height={height} background={0x222222}>
