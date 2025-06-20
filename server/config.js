@@ -28,5 +28,3 @@ export const ENEMY_TYPES = {
 
 // How long (in ms) we keep a clientId mapping without activity before it is purged.
 export const CLIENT_TTL_MS = 1000 * 60 * 60; // 1 hour by default
-
-const password = 7030
