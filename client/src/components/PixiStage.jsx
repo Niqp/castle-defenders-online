@@ -64,6 +64,12 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   // Constant circle radius (logical units) chosen small enough to fit many units per cell
   const UNIT_RADIUS = 0.15;
 
+  // -------------------  Death-effect state  -------------------
+  // Active blood splatters are stored here until they time-out.
+  // Each entry: { x, y, start }
+  const effectsRef = useRef([]);
+  const BLOOD_LIFE_MS = 700; // splash lasts this long
+
   // local state counter to trigger re-render
   const [, setFrameTick] = React.useState(0);
 
@@ -205,6 +211,12 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     // Remove data for units that disappeared
     for (let id of Array.from(targetPosRef.current.keys())) {
       if (!newTargets.has(id)) {
+        // Before purging, add a blood effect at last known position.
+        const lastPos = targetPosRef.current.get(id) || prevPosRef.current.get(id);
+        if (lastPos) {
+          effectsRef.current.push({ x: lastPos.x, y: lastPos.y, start: Date.now() });
+        }
+
         targetPosRef.current.delete(id);
         prevPosRef.current.delete(id);
         metaRef.current.delete(id);
@@ -408,6 +420,47 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     return null;
   }
 
+  /***************   Blood-splatter Render   ****************/
+  const renderEffects = () => {
+    const now = Date.now();
+
+    // Filter out expired splatters
+    effectsRef.current = effectsRef.current.filter(e => now - e.start < BLOOD_LIFE_MS);
+
+    return effectsRef.current.map((effect, idx) => {
+      const t = (now - effect.start) / BLOOD_LIFE_MS; // 0 → 1
+      const alpha = 1 - t; // fade out
+      const scale = 1 + 0.4 * t; // slight spread
+
+      const drawSplash = (g) => {
+        g.clear();
+        g.beginFill(0xbb0000, alpha);
+        // central blot
+        g.drawCircle(0, 0, UNIT_RADIUS * 0.5 * scale);
+        // little surrounding drops (fixed pseudo-random layout for consistency)
+        const drops = [
+          { dx: 0.08, dy: -0.04, r: 0.05 },
+          { dx: -0.06, dy: 0.06, r: 0.04 },
+          { dx: 0.03, dy: 0.07, r: 0.03 },
+        ];
+        drops.forEach(d => {
+          g.drawCircle(d.dx * scale, d.dy * scale, d.r * scale);
+        });
+        g.endFill();
+      };
+
+      return (
+        <pixiGraphics
+          key={`blood-${idx}-${effect.start}`}
+          x={effect.x}
+          y={effect.y}
+          draw={drawSplash}
+          alpha={alpha}
+        />
+      );
+    });
+  };
+
   return (
     <Application width={width} height={height} background={0x222222}>
       <pixiContainer x={offsetX} y={offsetY} scale={scale}>
@@ -415,6 +468,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         <pixiGraphics draw={drawPortalRow} />
         <pixiGraphics draw={drawCastleRow} />
         <pixiGraphics draw={drawGrid} />
+        {renderEffects()}
         {renderUnits()}
       </pixiContainer>
     </Application>
