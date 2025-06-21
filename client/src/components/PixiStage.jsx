@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { Application, extend } from '@pixi/react';
-import { Container, Graphics, Sprite, Texture, Assets } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, Assets, Text } from 'pixi.js';
 
 // Import sprite images (player + enemy)
 import swordsmanImg from '../sprites/units/swordsman.png';
@@ -20,7 +20,7 @@ const SPRITE_URLS = {
   troll: ogreImg,
 };
 
-extend({ Container, Graphics, Sprite });
+extend({ Container, Graphics, Sprite, Text });
 
 /******************************
  * Utility helpers            *
@@ -299,6 +299,27 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     }
   }, [logicalWidth, logicalHeight]);
 
+  const renderRowNumbers = () => {
+    // Display numeric labels for each visual row (original column index)
+    const elements = [];
+    // Scale text inversely so it stays a constant pixel size regardless of board scaling
+    const textScale = 1 / scale;
+    for (let y = 0; y < logicalHeight; y++) {
+      elements.push(
+        <pixiText
+          key={`row-number-${y}`}
+          text={`${y+1}`}
+          x={0.5}
+          y={y + 0.5}
+          anchor={{ x: 0.5, y: 0.5 }}
+          scale={textScale}
+          style={{ fill: 0xffffff, fontFamily: 'Arial', fontSize: 16 }}
+        />
+      );
+    }
+    return elements;
+  };
+
   /***************   Units Render   ****************/
   const renderUnits = () => {
     const elements = [];
@@ -507,6 +528,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         <pixiGraphics draw={drawPortalColumn} />
         <pixiGraphics draw={drawCastleColumn} />
         <pixiGraphics draw={drawGrid} />
+        {/* Row/column numeric labels */}
+        {renderRowNumbers()}
         {renderEffects()}
         {renderUnits()}
       </pixiContainer>

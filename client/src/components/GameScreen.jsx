@@ -1,6 +1,15 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import PixiStage from './PixiStage';
 import Loading from './Loading.jsx';
+import swordsmanImg from '../sprites/units/swordsman.png';
+import archerImg from '../sprites/units/archer.png';
+import knightImg from '../sprites/units/knight.png';
+import minerImg from '../sprites/workers/miner.png';
+import diggerImg from '../sprites/workers/digger.png';
+import excavatorImg from '../sprites/workers/excavator.png';
+import farmerImg from '../sprites/workers/farmer.png';
+import hunterImg from '../sprites/workers/hunter.png';
+import rancherImg from '../sprites/workers/rancher.png';
 // Removed 'io' import as socketRef is passed as a prop
 
 // ENEMY_COLORS might be used by PixiStage or game logic, keeping it for now.
@@ -8,6 +17,18 @@ const ENEMY_COLORS = {
   goblin: 0x44ee44,
   orc: 0x888888,
   troll: 0x9966cc
+};
+
+const SPRITE_MAP = {
+  'swordsman.png': swordsmanImg,
+  'archer.png': archerImg,
+  'knight.png': knightImg,
+  'miner.png': minerImg,
+  'digger.png': diggerImg,
+  'excavator.png': excavatorImg,
+  'farmer.png': farmerImg,
+  'hunter.png': hunterImg,
+  'rancher.png': rancherImg,
 };
 
 export default function GameScreen({ playerName, gameState, socketRef }) {
@@ -162,14 +183,15 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       return Object.entries(gameState.workerTypes).map(([type, cfg]) => ({
         type,
         cost: cfg.costs ?? { gold: cfg.cost ?? 0 },
-        current: workers[type] ?? 0
+        current: workers[type] ?? 0,
+        sprite: cfg.sprite ?? null,
       }));
     }
     // Fallback if server did not send workerTypes
     return [
-      { type: 'Miner', cost: { gold: 50 }, current: workers.Miner },
-      { type: 'Digger', cost: { gold: 200 }, current: workers.Digger },
-      { type: 'Excavator', cost: { gold: 500 }, current: workers.Excavator },
+      { type: 'Miner', cost: { gold: 50 }, current: workers.Miner, sprite: 'miner.png' },
+      { type: 'Digger', cost: { gold: 200 }, current: workers.Digger, sprite: 'digger.png' },
+      { type: 'Excavator', cost: { gold: 500 }, current: workers.Excavator, sprite: 'excavator.png' },
     ];
   }, [gameState?.workerTypes, workers]);
 
@@ -235,13 +257,14 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       return Object.entries(gameState.unitTypes).map(([type, cfg]) => ({
         type,
         cost: cfg.costs ?? { gold: cfg.gold ?? 0, food: cfg.food ?? 0 },
-        current: getCurrent(type)
+        current: getCurrent(type),
+        sprite: cfg.sprite ?? null,
       }));
     }
     return [
-      { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: getCurrent('Swordsman') },
-      { type: 'Archer', cost: { gold: 150, food: 15 }, current: getCurrent('Archer') },
-      { type: 'Knight', cost: { gold: 300, food: 30 }, current: getCurrent('Knight') },
+      { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: getCurrent('Swordsman'), sprite: 'swordsman.png' },
+      { type: 'Archer', cost: { gold: 150, food: 15 }, current: getCurrent('Archer'), sprite: 'archer.png' },
+      { type: 'Knight', cost: { gold: 300, food: 30 }, current: getCurrent('Knight'), sprite: 'knight.png' },
     ];
   }, [gameState?.unitTypes, playerUnits, aliveUnitCounts]);
 
@@ -350,7 +373,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                 {workerTypes.map(worker => (
                   <div key={worker.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
                     <div>
-                      <p className="font-semibold text-sm sm:text-base">{worker.type} <span className="badge badge-neutral badge-sm">x{worker.current}</span></p>
+                      <p className="font-semibold text-sm sm:text-base flex items-center">{SPRITE_MAP[worker.sprite] && <img src={SPRITE_MAP[worker.sprite]} alt={worker.type} className="w-5 h-5 mr-1" />} {worker.type} <span className="badge badge-neutral badge-sm ml-1">x{worker.current}</span></p>
                       <p className="text-xs text-base-content/70">Cost: {Object.entries(worker.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}</p>
                     </div>
                     <button 
@@ -374,7 +397,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                 {unitTypes.map(unit => (
                   <div key={unit.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
                     <div>
-                      <p className="font-semibold text-sm sm:text-base">{unit.type} <span className="badge badge-neutral badge-sm">x{unit.current}</span></p>
+                      <p className="font-semibold text-sm sm:text-base flex items-center">{SPRITE_MAP[unit.sprite] && <img src={SPRITE_MAP[unit.sprite]} alt={unit.type} className="w-5 h-5 mr-1" />} {unit.type} <span className="badge badge-neutral badge-sm ml-1">x{unit.current}</span></p>
                       <p className="text-xs text-base-content/70">Cost: {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}</p>
                     </div>
                     <button 

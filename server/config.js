@@ -6,12 +6,12 @@ export const TIMINGS = {
   COUNTDOWN_INTERVAL: 1000,
 };
 export const WORKER_TYPES = {
-  Miner: { costs: { gold: 50 }, outputs: { gold: 1 } },
-  Digger: { costs: { gold: 200 }, outputs: { gold: 5 } },
-  Excavator: { costs: { gold: 10 }, outputs: { gold: 10 } },
-  Farmer: { costs: { gold: 50 }, outputs: { food: 1 } },
-  Hunter: { costs: { gold: 200 }, outputs: { food: 5 } },
-  Rancher: { costs: { gold: 800 }, outputs: { food: 10 } },
+  Miner:    { costs: { gold: 50 },  outputs: { gold: 1 },  sprite: 'miner.png' },
+  Digger:   { costs: { gold: 200 }, outputs: { gold: 5 },  sprite: 'digger.png' },
+  Excavator:{ costs: { gold: 10 },  outputs: { gold: 10 }, sprite: 'excavator.png' },
+  Farmer:   { costs: { gold: 50 },  outputs: { food: 1 },  sprite: 'farmer.png' },
+  Hunter:   { costs: { gold: 200 }, outputs: { food: 5 },  sprite: 'hunter.png' },
+  Rancher:  { costs: { gold: 800 }, outputs: { food: 10 }, sprite: 'rancher.png' },
 };
 export const UNIT_TYPES = {
   Swordsman: { costs: { gold: 10, food: 10 }, hp: 50, dmg: 5, range: 40, speed: 3, sprite: 'swordsman.png' },
