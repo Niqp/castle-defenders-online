@@ -112,22 +112,21 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         const enemies = units.filter(u => u.type === 'enemy');
         const cellInBattle = players.length && enemies.length;
 
-        // helper to assign horizontal slots within half-cell
-        const assignHalf = (arr, half) => {
+        // helper to assign vertical slots within half-cell
+        const assignSide = (arr, side) => {
           const count = arr.length;
           if (!count) return;
-          // Available horizontal span inside the half-cell (±0.4 from centre)
+          // Available vertical span inside the side (±0.4 from centre)
           const spacing = 0.8 / count;
 
           arr.forEach((unit, idx) => {
             const base = cellCenter(r, c, rows, cols);
-            const yHalfOffset = half === 'top' ? -0.25 : 0.25;
-            const xOffset = -0.4 + spacing * (idx + 0.5);
+            const xHalfOffset = side === 'left' ? -0.25 : 0.25;
+            const yOffset = -0.4 + spacing * (idx + 0.5);
             targets.set(unit.id, {
-              x: base.x + xOffset,
-              y: base.y + yHalfOffset,
+              x: base.x + xHalfOffset,
+              y: base.y + yOffset,
             });
-            // Determine sprite key based on player unitType or enemy subtype (lowercase)
             const spriteKey = unit.type === 'player'
               ? (unit.unitType || '').toLowerCase()
               : (unit.subtype || '').toLowerCase();
@@ -142,8 +141,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
           });
         };
 
-        assignHalf(enemies, 'top');
-        assignHalf(players, 'bottom');
+        assignSide(players, 'left');
+        assignSide(enemies, 'right');
       }
     }
     metaRef.current = meta;
@@ -177,26 +176,24 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
           const start = battleStartTimeRef.current.get(id) || Date.now();
           const phase = (((Date.now() - start) % cycleMs) / cycleMs);
 
-          const halfOffset = unitType === 'player' ? 0.25 : -0.25;
-          const cellCenterX = Math.floor(target.x) + 0.5;
-          let dirX = 0;
-          if (Math.abs(target.x - cellCenterX) > 0.01) {
-            dirX = target.x < cellCenterX ? -1 : 1;
-          } else {
-            dirX = unitType === 'player' ? -1 : 1;
+          const halfOffset = unitType === 'player' ? -0.25 : 0.25;
+          const cellCenterY = Math.floor(target.y) + 0.5;
+          let dirY = 0;
+          if (Math.abs(target.y - cellCenterY) > 0.01) {
+            dirY = target.y < cellCenterY ? -1 : 1;
           }
           const curveAmp = 0.06;
-          let offY = 0;
           let offX = 0;
+          let offY = 0;
           if (phase < 0.5) {
             const p = phase * 2;
             const ease = 1 - Math.pow(1 - p, 1.5);
-            offY = -halfOffset * ease;
-            offX = curveAmp * Math.sin(Math.PI * ease) * dirX;
+            offX = -halfOffset * ease;
+            offY = curveAmp * Math.sin(Math.PI * ease) * dirY;
           } else {
             const p = (phase - 0.5) * 2;
-            offY = -halfOffset * (1 - p);
-            offX = 0;
+            offX = -halfOffset * (1 - p);
+            offY = 0;
           }
           battleReturnOffsetRef.current.set(id, { x: offX, y: offY });
         }
@@ -317,38 +314,34 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       const unitType = meta?.type || (id.startsWith('enemy') ? 'enemy' : 'player');
 
       // Battle animation: slow approach, fast curved retreat
-      let battleOffsetY = 0;
       let battleOffsetX = 0;
+      let battleOffsetY = 0;
       const RETURN_MS = 300;
 
       if (meta?.inBattle) {
         const cycleMs = 1000; // server combat tick
         const start = battleStartTimeRef.current.get(id) || now;
-        const phase = (((now - start) % cycleMs) / cycleMs); // 0 at battle start, loops 0→1
+        const phase = (((now - start) % cycleMs) / cycleMs);
 
-        const halfOffset = unitType === 'player' ? 0.25 : -0.25;
-        // Direction based on actual horizontal position inside the cell
-        const cellCenterX = Math.floor(target.x) + 0.5;
-        let dirX = 0;
-        if (Math.abs(target.x - cellCenterX) > 0.01) {
-          dirX = target.x < cellCenterX ? -1 : 1;
-        } else {
-          // fallback: player left, enemy right
-          dirX = unitType === 'player' ? -1 : 1;
+        const halfOffset = unitType === 'player' ? -0.25 : 0.25;
+
+        // Direction based on actual vertical position inside the cell
+        const cellCenterY = Math.floor(target.y) + 0.5;
+        let dirY = 0;
+        if (Math.abs(target.y - cellCenterY) > 0.01) {
+          dirY = target.y < cellCenterY ? -1 : 1;
         }
-        const curveAmp = 0.06; // horizontal curve on retreat
+        const curveAmp = 0.06; // vertical curve on retreat
 
         if (phase < 0.5) {
-          // Retreat: 0 → 0.5 (fast, curved)
-          const p = phase * 2; // 0 → 1
-          const ease = 1 - Math.pow(1 - p, 1.5); // ease-out faster
-          battleOffsetY = -halfOffset * ease;
-          battleOffsetX = curveAmp * Math.sin(Math.PI * ease) * dirX;
+          const p = phase * 2;
+          const ease = 1 - Math.pow(1 - p, 1.5);
+          battleOffsetX = -halfOffset * ease;
+          battleOffsetY = curveAmp * Math.sin(Math.PI * ease) * dirY;
         } else {
-          // Approach back: 0.5 → 1 (slow, straight)
-          const p = (phase - 0.5) * 2; // 0 → 1
-          battleOffsetY = -halfOffset * (1 - p);
-          battleOffsetX = 0;
+          const p = (phase - 0.5) * 2;
+          battleOffsetX = -halfOffset * (1 - p);
+          battleOffsetY = 0;
         }
       } else {
         // Not in battle. Check if we just ended battle and need smooth return
@@ -358,8 +351,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
           if (elapsed < RETURN_MS) {
             const startOff = battleReturnOffsetRef.current.get(id) || { x: 0, y: 0 };
             const p = 1 - elapsed / RETURN_MS; // 1 → 0
-            battleOffsetY = startOff.y * p;
             battleOffsetX = startOff.x * p;
+            battleOffsetY = startOff.y * p;
           } else {
             battleEndTimeRef.current.delete(id); // finished
             battleReturnOffsetRef.current.delete(id);
@@ -367,21 +360,31 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
         }
       }
 
-      // HP bar graphics drawer (without the unit circle)
+      // HP bar graphics: vertical bar on side (right for players, left for enemies)
       const drawHpBar = (g) => {
         g.clear();
 
-        // Draw HP bar background
-        const barWidth = radius * 2;
-        const barHeight = 0.08; // logical units
-        const barY = -radius - 0.15;
+        const barWidth = 0.08; // logical units
+        const barHeight = radius * 2;
+        const margin = 0.15;
+
+        // Determine X position based on side
+        const barX = unitType === 'player'
+          ? -radius - margin - barWidth
+          : radius + margin;
+
+        const barYTop = -radius;
+
+        // Background
         g.beginFill(0x333333);
-        g.drawRect(-radius, barY, barWidth, barHeight);
+        g.drawRect(barX, barYTop, barWidth, barHeight);
         g.endFill();
 
-        // Draw HP bar fill
+        // Fill (draw from bottom up for intuitive drain effect)
+        const fillHeight = barHeight * ratio;
+        const fillY = barYTop + (barHeight - fillHeight);
         g.beginFill(0x00ff00);
-        g.drawRect(-radius, barY, barWidth * ratio, barHeight);
+        g.drawRect(barX, fillY, barWidth, fillHeight);
         g.endFill();
       };
 
