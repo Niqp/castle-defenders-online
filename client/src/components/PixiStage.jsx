@@ -25,8 +25,13 @@ extend({ Container, Graphics, Sprite });
 /******************************
  * Utility helpers            *
  ******************************/
-// Logical coordinates: one unit per cell (so logical width = cols, height = rows)
-const cellCenter = (row, col) => ({ x: col + 0.5, y: row + 0.5 });
+// After a 90° anticlockwise rotation, logical X axis corresponds to original rows (left←→right),
+// and logical Y axis corresponds to original columns (top↕︎bottom).  The castle column is now at X=0,
+// and the portal column at X=rows-1.
+const cellCenter = (row, col, rows, cols) => ({
+  x: rows - 1 - row + 0.5,   // rows run right → left after rotation
+  y: col + 0.5               // columns become vertical axis (top → bottom)
+});
 
 const offsetWithinCell = (index, total, radius) => {
   if (total === 1) return { dx: 0, dy: 0 };
@@ -41,10 +46,14 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const rows = grid && grid.length ? grid.length : 1;
   const cols = grid && grid.length && Array.isArray(grid[0]) ? grid[0].length : 1;
 
+  // Logical board width/height after rotation
+  const logicalWidth = rows;
+  const logicalHeight = cols;
+
   // each logical unit (cell) maps to this many screen pixels
-  const scale = Math.min(width / cols, height / rows);
-  const gameAreaWidth = cols * scale;
-  const gameAreaHeight = rows * scale;
+  const scale = Math.min(width / logicalWidth, height / logicalHeight);
+  const gameAreaWidth = logicalWidth * scale;
+  const gameAreaHeight = logicalHeight * scale;
   const offsetX = (width - gameAreaWidth) / 2;
   const offsetY = (height - gameAreaHeight) / 2;
 
@@ -111,7 +120,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
           const spacing = 0.8 / count;
 
           arr.forEach((unit, idx) => {
-            const base = cellCenter(r, c);
+            const base = cellCenter(r, c, rows, cols);
             const yHalfOffset = half === 'top' ? -0.25 : 0.25;
             const xOffset = -0.4 + spacing * (idx + 0.5);
             targets.set(unit.id, {
@@ -234,37 +243,39 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   }, [grid, rows, cols]);
 
   /***************   Memoised Drawers   ****************/
-  const drawPortalRow = useMemo(() => (g) => {
+  const drawPortalColumn = useMemo(() => (g) => {
     g.clear();
     g.beginFill(0x663399);
-    g.drawRect(0, 0, cols, 1);
+    // Rightmost column after rotation
+    g.drawRect(logicalWidth - 1, 0, 1, logicalHeight);
     g.endFill();
-  }, [cols]);
+  }, [logicalWidth, logicalHeight]);
 
-  const drawCastleRow = useMemo(() => (g) => {
+  const drawCastleColumn = useMemo(() => (g) => {
     g.clear();
     g.beginFill(0x336699);
-    g.drawRect(0, rows - 1, cols, 1);
+    // Leftmost column after rotation
+    g.drawRect(0, 0, 1, logicalHeight);
     g.endFill();
-  }, [cols, rows]);
+  }, [logicalHeight]);
 
   const drawGrid = useMemo(() => (g) => {
     g.clear();
     const lineColor = 0xffffff;
     const lineW = 0.04; // logical units (≈2px after scale≈50)
-    // verticals
-    for (let c = 0; c <= cols; c++) {
+    // verticals (columns in rotated view)
+    for (let x = 0; x <= logicalWidth; x++) {
       g.beginFill(lineColor);
-      g.drawRect(c - lineW / 2, 0, lineW, rows);
+      g.drawRect(x - lineW / 2, 0, lineW, logicalHeight);
       g.endFill();
     }
-    // horizontals
-    for (let r = 0; r <= rows; r++) {
+    // horizontals (rows in rotated view)
+    for (let y = 0; y <= logicalHeight; y++) {
       g.beginFill(lineColor);
-      g.drawRect(0, r - lineW / 2, cols, lineW);
+      g.drawRect(0, y - lineW / 2, logicalWidth, lineW);
       g.endFill();
     }
-  }, [rows, cols]);
+  }, [logicalWidth, logicalHeight]);
 
   /***************   Units Render   ****************/
   const renderUnits = () => {
@@ -465,8 +476,8 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     <Application width={width} height={height} background={0x222222}>
       <pixiContainer x={offsetX} y={offsetY} scale={scale}>
         {/* draw order: backgrounds → grid → units */}
-        <pixiGraphics draw={drawPortalRow} />
-        <pixiGraphics draw={drawCastleRow} />
+        <pixiGraphics draw={drawPortalColumn} />
+        <pixiGraphics draw={drawCastleColumn} />
         <pixiGraphics draw={drawGrid} />
         {renderEffects()}
         {renderUnits()}
