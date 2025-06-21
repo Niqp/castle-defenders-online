@@ -50,12 +50,37 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const logicalWidth = rows;
   const logicalHeight = cols;
 
-  // each logical unit (cell) maps to this many screen pixels
-  const scale = Math.min(width / logicalWidth, height / logicalHeight);
+  // Responsive scaling: on mobile we prioritise height so the full vertical board is visible
+  // and allow horizontal scrolling. On larger viewports we keep the previous "fit" behaviour.
+  const MOBILE_BREAKPOINT = 640; // Tailwind's `sm` breakpoint (in px)
+
+  const isMobile = width < MOBILE_BREAKPOINT;
+
+  // Mobile cell-size limits (px per logical unit)
+  const MAX_MOBILE_CELL = 80; // px cell upper bound to limit horizontal scroll
+
+  const scaleFitHeight = height / logicalHeight;
+
+  let scale;
+  if (isMobile) {
+    // Use the scale that fits the height, but cap individual cell size to avoid excessive scroll.
+    scale = Math.min(scaleFitHeight, MAX_MOBILE_CELL);
+  } else {
+    scale = Math.min(width / logicalWidth, height / logicalHeight);
+  }
+
+  // Dimensions of the logical game area after scaling
   const gameAreaWidth = logicalWidth * scale;
   const gameAreaHeight = logicalHeight * scale;
-  const offsetX = (width - gameAreaWidth) / 2;
+
+  // Positioning: centre the board horizontally on desktop, but start at x=0 on mobile (so left-aligned)
+  const offsetX = isMobile ? 0 : (width - gameAreaWidth) / 2;
   const offsetY = (height - gameAreaHeight) / 2;
+
+  // The underlying PIXI canvas should match the true gameAreaWidth on mobile so the whole board is
+  // scrollable.  On desktop/tablet we keep it equal to the container width (unchanged behaviour).
+  const canvasWidth = isMobile ? gameAreaWidth : width;
+  const canvasHeight = height; // always container height
 
   /***************   Animation state refs   ****************/
   const prevPosRef = useRef(new Map());            // id -> {x,y}
@@ -476,7 +501,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   };
 
   return (
-    <Application width={width} height={height} background={0x222222}>
+    <Application width={canvasWidth} height={canvasHeight} background={0x222222}>
       <pixiContainer x={offsetX} y={offsetY} scale={scale}>
         {/* draw order: backgrounds → grid → units */}
         <pixiGraphics draw={drawPortalColumn} />

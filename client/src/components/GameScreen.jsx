@@ -305,7 +305,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       {/* Main Content Area */}
       <div className="flex-grow flex flex-col lg:flex-row overflow-hidden p-2 sm:p-4 gap-2 sm:gap-4">
         {/* Game Canvas */}
-        <div className="min-h-[clamp(200px,40vh,350px)] flex-grow lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-hidden flex p-1 sm:p-2">
+        <div className="h-[50vh] sm:h-[clamp(200px,40vh,450px)] flex-none sm:flex-grow lg:w-2/3 lg:h-full bg-black rounded-lg shadow-xl overflow-x-auto overflow-y-hidden flex p-1 sm:p-2">
           <div ref={pixiContainerRef} className="relative w-full h-full">
             {stageReady && (
               <PixiStage

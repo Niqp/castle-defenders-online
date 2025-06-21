@@ -2,7 +2,7 @@
 // Manages the game grid for castle defenders
 
 const DEFAULT_ROWS = 12; // Can be changed later
-const MIN_COLUMNS = 3; // Scales up with player count
+const MIN_COLUMNS = 7; // Scales up with player count
 
 class Grid {
   constructor(playerCount = 1, rows = DEFAULT_ROWS) {
