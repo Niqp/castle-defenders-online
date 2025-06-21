@@ -1,5 +1,10 @@
 // Battle.js - Handles battle mode between units on the grid
 
+// Helper: choose a random element from an array (assuming length > 0)
+function randomElement(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 // Assigns battles for units sharing a cell
 function checkAndStartBattles(grid) {
   for (let row = 1; row < grid.rows - 1; row++) {
@@ -12,13 +17,13 @@ function checkAndStartBattles(grid) {
         for (const player of players) {
           if (!player.inBattle) {
             player.inBattle = true;
-            player.targetId = enemies[0].id;
+            player.targetId = randomElement(enemies).id;
           }
         }
         for (const enemy of enemies) {
           if (!enemy.inBattle) {
             enemy.inBattle = true;
-            enemy.targetId = players[0].id;
+            enemy.targetId = randomElement(players).id;
           }
         }
       }
@@ -66,7 +71,7 @@ function processBattles(grid) {
         } else {
           if (!player.inBattle || !aliveEnemies.find(e => e.id === player.targetId)) {
             player.inBattle = true;
-            player.targetId = aliveEnemies[0].id;
+            player.targetId = randomElement(aliveEnemies).id;
           }
         }
       }
@@ -78,15 +83,13 @@ function processBattles(grid) {
         } else {
           if (!enemy.inBattle || !alivePlayers.find(p => p.id === enemy.targetId)) {
             enemy.inBattle = true;
-            enemy.targetId = alivePlayers[0].id;
+            enemy.targetId = randomElement(alivePlayers).id;
           }
         }
       }
     }
   }
 }
-
-
 
 export { checkAndStartBattles, processBattles };
 
