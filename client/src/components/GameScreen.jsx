@@ -115,9 +115,55 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   function handleSpawnUnit(type) {
     socketRef.current?.emit('spawnUnit', type, selectedCol);
   }
-  function handleMine() {
+  const mineButtonRef = useRef(null);
+
+  const spawnGoldChips = (amount = 1) => {
+    const btn = mineButtonRef.current;
+    if (!btn) return;
+    const btnRect = btn.getBoundingClientRect();
+
+    const base = 1;
+    const NUM_CHIPS = Math.max(base, amount * base);
+    for (let i = 0; i < NUM_CHIPS; i++) {
+      const chip = document.createElement('span');
+      chip.className = 'gold-chip';
+      // random start inside button bounds (viewport coords)
+      const startX = btnRect.left + Math.random() * btnRect.width;
+      const startY = btnRect.top + Math.random() * btnRect.height;
+      chip.style.left = `${startX}px`;
+      chip.style.top = `${startY}px`;
+
+      const distance = 120 + Math.random() * 80; // 80–140px reach
+      const dx = (Math.random() < 0.5 ? -0.15 : 0.15) * distance;
+      const dy = 60 + Math.random() * 60; // always downward travel at end
+      const peak = -(60 + Math.random() * 60); // upward peak relative to start
+
+      // Attach and animate via JS for perfectly smooth arc
+      document.body.appendChild(chip);
+
+      const duration = 1000; // ms
+      const startTime = performance.now();
+
+      const animate = (now) => {
+        const t = Math.min(1, (now - startTime) / duration);
+        // Parabolic vertical motion: peak at t=0.5
+        const x = dx * t;
+        const y = peak * 4 * t * (1 - t) + dy * t;
+        chip.style.transform = `translate(${x}px, ${y}px)`;
+        chip.style.opacity = `${1 - t}`;
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          chip.remove();
+        }
+      };
+      requestAnimationFrame(animate);
+    }
+  };
+
+  const handleMine = () => {
     socketRef.current?.emit('mine');
-  }
+  };
 
   const [animatedWaveIn, setAnimatedWaveIn] = useState(nextWaveIn);
   useEffect(() => {
@@ -281,7 +327,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const stageReady = gridReady && pixiDimensions.width > 0 && pixiDimensions.height > 0;
 
   return (
-    <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content">
+    <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content relative">
       {/* Header Navbar */}
       <div className="navbar bg-base-300 shadow-lg sticky top-0 z-50 flex flex-col sm:flex-row py-2 sm:py-0">
         <div className="navbar-start min-w-0 sm:w-auto flex flex-col items-center sm:flex-row sm:justify-start sm:items-center order-1 sm:order-none w-full sm:w-auto py-1 sm:py-0">
@@ -354,8 +400,9 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
             <div className="card-body p-3 sm:p-4">
               <h3 className="card-title text-md sm:text-lg">Resources</h3>
               <button 
-                className="btn btn-primary btn-sm sm:btn-md w-full mt-2" 
-                onClick={handleMine}
+                className="btn btn-primary btn-sm sm:btn-md w-full mt-2 relative z-10" 
+                onClick={() => { spawnGoldChips(1); handleMine(); }}
+                ref={mineButtonRef}
                 disabled={!playerAlive}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm2 2a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm-2 5a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd" /></svg>

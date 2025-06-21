@@ -1,3 +1,30 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;400;600&display=swap');
 @import "tailwindcss";
 @plugin "daisyui";
+
+/* Gold chip animation for Mine Gold button */
+.gold-chip {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffd700 0%, #ffae00 60%, #b8860b 100%);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(0, 0);
+  z-index: 0; /* behind interactive elements */
+}
+@keyframes gold-chip-arc {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  40% {
+    transform: translate(calc(var(--dx) * 0.5), var(--peak));
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy));
+    opacity: 0;
+  }
+}
