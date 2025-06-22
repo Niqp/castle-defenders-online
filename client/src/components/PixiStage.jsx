@@ -13,6 +13,8 @@ import ogreImg from '../sprites/units/ogre.png';
 import grassImg from '../sprites/background/grass.png';
 import roadImg from '../sprites/background/road.png';
 import stoneImg from '../sprites/background/stone.png';
+import castleImg from '../sprites/buildings/castle.png';
+import portalImg from '../sprites/buildings/portal.png';
 
 const SPRITE_URLS = {
   swordsman: swordsmanImg,
@@ -24,6 +26,8 @@ const SPRITE_URLS = {
   grass: grassImg,
   road: roadImg,
   stone: stoneImg,
+  castle: castleImg,
+  portal: portalImg,
 };
 
 extend({ Container, Graphics, Sprite, Text });
@@ -347,12 +351,23 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       elements.push(
         <pixiText
           key={`row-number-${y}`}
-          text={`${y+1}`}
+          text={`${y + 1}`}
           x={0.5}
           y={y + 0.5}
           anchor={{ x: 0.5, y: 0.5 }}
           scale={textScale}
-          style={{ fill: 0xffffff, fontFamily: 'Arial', fontSize: 16 }}
+          style={{
+            fill: 0xffffff,
+            fontFamily: 'Arial',
+            fontSize: 24,
+            stroke: 0x000000,
+            strokeThickness: 4,
+            dropShadow: true,
+            dropShadowColor: 0x000000,
+            dropShadowBlur: 2,
+            dropShadowAngle: Math.PI / 4,
+            dropShadowDistance: 2,
+          }}
         />
       );
     }
@@ -595,15 +610,54 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
     return tiles;
   };
 
+  /***************   Structures Render   ****************/
+  const renderStructures = () => {
+    if (!textures) return null;
+    const elems = [];
+    const castleTex = textures['castle'];
+    const portalTex = textures['portal'];
+    // Desired sprite size to fit nicely within cell (90% of cell)
+    const spriteSize = 0.9;
+    const scaleCastle = spriteSize / (castleTex?.width || 64);
+    const scalePortal = spriteSize / (portalTex?.width || 64);
+
+    for (let y = 0; y < logicalHeight; y++) {
+      // Castle column at x = 0
+      elems.push(
+        <pixiSprite
+          key={`castle-${y}`}
+          texture={castleTex}
+          x={0.5}
+          y={y + 0.5}
+          anchor={0.5}
+          scale={scaleCastle}
+        />
+      );
+      // Portal column at x = logicalWidth - 0.5 (center of last column)
+      elems.push(
+        <pixiSprite
+          key={`portal-${y}`}
+          texture={portalTex}
+          x={logicalWidth - 0.5}
+          y={y + 0.5}
+          anchor={0.5}
+          scale={scalePortal}
+        />
+      );
+    }
+    return elems;
+  };
+
   return (
     <Application {...appProps} background={0x222222}>
       <pixiContainer x={offsetX} y={offsetY} scale={scale}>
-        {/* draw order: background tiles → units */}
+        {/* draw order: background tiles → structures → units */}
         {renderBackground()}
-        {/* Row/column numeric labels */}
-        {renderRowNumbers()}
+        {renderStructures()}
         {renderEffects()}
         {renderUnits()}
+        {/* Row/column numeric labels */}
+        {renderRowNumbers()}
       </pixiContainer>
     </Application>
   );
