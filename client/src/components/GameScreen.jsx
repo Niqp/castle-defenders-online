@@ -298,7 +298,11 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   }, [grid, playerName]);
 
   const unitTypes = useMemo(() => {
-    const getCurrent = (type) => aliveUnitCounts[type] ?? playerUnits[type] ?? 0;
+    // Always show the number of ALIVE units. If none are alive, display 0
+    // rather than falling back to the total number ever hired.
+    const getCurrent = (type) => (
+      aliveUnitCounts[type] !== undefined ? aliveUnitCounts[type] : 0
+    );
     if (gameState?.unitTypes) {
       return Object.entries(gameState.unitTypes).map(([type, cfg]) => ({
         type,
@@ -464,11 +468,11 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <span className="label-text-alt text-xs">{selectedCol + 1}</span>
                   </label>
                   {cols <= 8 ? (
-                    <div className="flex flex-wrap gap-1 pt-1">
+                    <div className="grid gap-1 pt-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
                       {Array.from({ length: cols }).map((_, idx) => (
                         <button
                           key={idx}
-                          className={`btn btn-xs sm:btn-sm flex-1 ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
+                          className={`btn btn-xs sm:btn-sm ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
                           onClick={() => setSelectedCol(idx)}
                           disabled={!playerAlive}
                         >{idx + 1}</button>
