@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { Application, extend } from '@pixi/react';
-import { Container, Graphics, Sprite, Texture, Assets, Text } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture, Assets, Text, extensions, ResizePlugin } from 'pixi.js';
 
 // Import sprite images (player + enemy)
 import swordsmanImg from '../sprites/units/swordsman.png';
@@ -22,6 +22,9 @@ const SPRITE_URLS = {
 
 extend({ Container, Graphics, Sprite, Text });
 
+// Register PixiJS Resize plugin to enable automatic renderer resizing
+extensions.add(ResizePlugin);
+
 /******************************
  * Utility helpers            *
  ******************************/
@@ -42,7 +45,26 @@ const offsetWithinCell = (index, total, radius) => {
 /******************************
  * PixiStage Component        *
  ******************************/
-export default function PixiStage({ width = 800, height = 600, grid = [] }) {
+export default function PixiStage({ grid = [], resizeTarget = window }) {
+
+  /* --------------------------------------
+   * Determine current rendering area size
+   * ------------------------------------*/
+  let width = 800;
+  let height = 600;
+  if (resizeTarget && resizeTarget.getBoundingClientRect) {
+    const rect = resizeTarget.getBoundingClientRect();
+    width = rect.width || width;
+    height = rect.height || height;
+  } else if (resizeTarget === window) {
+    width = window.innerWidth;
+    height = window.innerHeight;
+  }
+
+  /* ------------------------------
+   * Board & scaling calculations
+   * ----------------------------*/
+
   const rows = grid && grid.length ? grid.length : 1;
   const cols = grid && grid.length && Array.isArray(grid[0]) ? grid[0].length : 1;
 
@@ -77,10 +99,14 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   const offsetX = isMobile ? 0 : (width - gameAreaWidth) / 2;
   const offsetY = (height - gameAreaHeight) / 2;
 
-  // The underlying PIXI canvas should match the true gameAreaWidth on mobile so the whole board is
-  // scrollable.  On desktop/tablet we keep it equal to the container width (unchanged behaviour).
+  // On mobile we want the canvas to extend beyond viewport to enable horizontal scroll.
   const canvasWidth = isMobile ? gameAreaWidth : width;
-  const canvasHeight = height; // always container height
+  const canvasHeight = height;
+
+  // Determine props for <Application>: use resize plugin on desktop/tablet, disable on mobile.
+  const appProps = isMobile
+    ? { width: canvasWidth, height: canvasHeight }
+    : { width: canvasWidth, height: canvasHeight, resizeTo: resizeTarget };
 
   /***************   Animation state refs   ****************/
   const prevPosRef = useRef(new Map());            // id -> {x,y}
@@ -524,7 +550,7 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
   };
 
   return (
-    <Application width={canvasWidth} height={canvasHeight} background={0x222222}>
+    <Application {...appProps} background={0x222222}>
       <pixiContainer x={offsetX} y={offsetY} scale={scale}>
         {/* draw order: backgrounds → grid → units */}
         <pixiGraphics draw={drawPortalColumn} />

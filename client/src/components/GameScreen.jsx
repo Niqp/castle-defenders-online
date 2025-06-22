@@ -184,44 +184,10 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const castleHpPercentage = Math.max(0, Math.min(100, ((castleHp[playerName] ?? 0) / MAX_CASTLE_HP) * 100));
 
   const pixiContainerRef = useRef(null);
-  const [pixiDimensions, setPixiDimensions] = useState({ width: 0, height: 0 }); // Will be set by ResizeObserver
 
-  useEffect(() => {
-    const targetElement = pixiContainerRef.current;
-    if (!targetElement) return;
-
-    const resizeObserver = new ResizeObserver(entries => {
-      for (let entry of entries) {
-        if (entry.target === targetElement) {
-          const { width, height } = entry.contentRect;
-          console.log('[ResizeObserver] Detected dimensions:', { width, height });
-          // Only update if dimensions actually changed to avoid potential loops if not careful
-          setPixiDimensions(prevDims => {
-            if (prevDims.width !== width || prevDims.height !== height) {
-              console.log('[ResizeObserver] Setting new dimensions:', { width, height });
-              return { width, height };
-            }
-            return prevDims;
-          });
-        }
-      }
-    });
-
-    resizeObserver.observe(targetElement);
-
-    // Kick-start with current rect so we don't rely solely on observer callbacks (some
-    // browsers may batch them). This guarantees PixiStage appears at least once.
-    const rect = targetElement.getBoundingClientRect();
-    if (rect.width && rect.height) {
-      setPixiDimensions({ width: rect.width, height: rect.height });
-    }
-
-    // Clean up observer on component unmount
-    return () => {
-      resizeObserver.unobserve(targetElement);
-      resizeObserver.disconnect();
-    };
-  }, []); // Empty dependency array ensures this runs once on mount and cleans up on unmount
+  // Stage is ready once grid is ready and the container element exists
+  const gridReady = useMemo(() => Array.isArray(grid) && grid.length && Array.isArray(grid[0]), [grid]);
+  const stageReady = gridReady && pixiContainerRef.current !== null;
 
   // Dynamically build worker type list based on server-provided config (fallback to legacy list)
   const workerTypes = useMemo(() => {
@@ -326,10 +292,6 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     });
   };
 
-  // Readiness flags
-  const gridReady = useMemo(() => Array.isArray(grid) && grid.length && Array.isArray(grid[0]), [grid]);
-  const stageReady = gridReady && pixiDimensions.width > 0 && pixiDimensions.height > 0;
-
   return (
     <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content relative">
       {/* Header Navbar */}
@@ -382,9 +344,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
           <div ref={pixiContainerRef} className="relative w-full h-full">
             {stageReady && (
               <PixiStage
-                key={`${pixiDimensions.width}-${pixiDimensions.height}`}
-                width={pixiDimensions.width}
-                height={pixiDimensions.height}
+                resizeTarget={pixiContainerRef.current}
                 grid={grid}
               />
             )}
