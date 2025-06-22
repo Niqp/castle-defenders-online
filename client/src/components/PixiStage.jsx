@@ -10,6 +10,9 @@ import knightImg from '../sprites/units/knight.png';
 import goblinImg from '../sprites/units/goblin.png';
 import orcImg from '../sprites/units/orc.png';
 import ogreImg from '../sprites/units/ogre.png';
+import grassImg from '../sprites/background/grass.png';
+import roadImg from '../sprites/background/road.png';
+import stoneImg from '../sprites/background/stone.png';
 
 const SPRITE_URLS = {
   swordsman: swordsmanImg,
@@ -18,6 +21,9 @@ const SPRITE_URLS = {
   goblin: goblinImg,
   orc: orcImg,
   troll: ogreImg,
+  grass: grassImg,
+  road: roadImg,
+  stone: stoneImg,
 };
 
 extend({ Container, Graphics, Sprite, Text });
@@ -90,6 +96,11 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   } else {
     scale = Math.min(width / logicalWidth, height / logicalHeight);
   }
+
+  // Ensure scale is an integer number of pixels to avoid sub-pixel gaps that
+  // can appear between tiled background sprites when their edges fall on
+  // fractional pixel boundaries. We keep a minimum of 1px per logical unit.
+  scale = Math.max(1, Math.floor(scale));
 
   // Dimensions of the logical game area after scaling
   const gameAreaWidth = logicalWidth * scale;
@@ -549,13 +560,46 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
     });
   };
 
+  /***************   Background Tiles Render   ****************/
+  const renderBackground = () => {
+    if (!textures) return null;
+    const tiles = [];
+    for (let x = 0; x < logicalWidth; x++) {
+      for (let y = 0; y < logicalHeight; y++) {
+        let texKey;
+        if (x === 0) {
+          texKey = 'grass'; // castle column
+        } else if (x === logicalWidth - 1) {
+          texKey = 'stone'; // portal column
+        } else {
+          texKey = 'road'; // middle cells
+        }
+        const tex = textures[texKey];
+        // Slightly oversize each tile by exactly one pixel in world units
+        // to ensure adjacent tiles overlap and no visual gap appears even
+        // if rounding leads to a 1-pixel seam.
+        const overlap = 1 / scale; // world-units equivalent of 1 pixel
+        const size = 1 + overlap;
+        tiles.push(
+          <pixiSprite
+            key={`bg-${x}-${y}`}
+            texture={tex}
+            x={x}
+            y={y}
+            width={size}
+            height={size}
+          />
+        );
+      }
+    }
+    return tiles;
+  };
+
   return (
     <Application {...appProps} background={0x222222}>
       <pixiContainer x={offsetX} y={offsetY} scale={scale}>
-        {/* draw order: backgrounds → grid → units */}
-        <pixiGraphics draw={drawPortalColumn} />
-        <pixiGraphics draw={drawCastleColumn} />
-        <pixiGraphics draw={drawGrid} />
+        {/* draw order: background tiles → units */}
+        {renderBackground()}
         {/* Row/column numeric labels */}
         {renderRowNumbers()}
         {renderEffects()}
