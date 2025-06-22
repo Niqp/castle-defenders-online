@@ -118,11 +118,6 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // when targets updated, trigger immediate render so circles appear
-  useEffect(() => {
-    setFrameTick(f => f + 1);
-  }, [grid]);
-
   // Utility to compute target positions for all units in current grid
   const computeTargets = () => {
     const targets = new Map();
@@ -260,8 +255,15 @@ export default function PixiStage({ width = 800, height = 600, grid = [] }) {
       }
     }
 
-    // Finally replace targets
+    // Finally replace targets and trigger an immediate re-render now that
+    // all refs reflect the latest grid. This guarantees the first frame
+    // after a grid update starts interpolating from the correct previous
+    // position instead of potentially drawing the unit at its new target
+    // location without tweening.
     targetPosRef.current = newTargets;
+
+    // Force a re-render so changes take effect right away.
+    setFrameTick(f => f + 1);
   }, [grid, rows, cols]);
 
   /***************   Memoised Drawers   ****************/
