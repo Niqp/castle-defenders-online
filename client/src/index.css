@@ -28,3 +28,12 @@
     opacity: 0;
   }
 }
+
+/*----------------------------------------------
+  PixiJS canvas tweaks
+  Allow horizontal panning (scrolling) on touch
+  devices even though Pixi 8 sets touch-action:none
+----------------------------------------------*/
+canvas {
+  touch-action: pan-x !important;
+}
