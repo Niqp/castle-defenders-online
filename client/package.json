@@ -10,14 +10,14 @@
   },
   "dependencies": {
     "@pixi/react": "8.0.2",
-    "@tailwindcss/vite": "^4.1.8",
+    "@tailwindcss/vite": "^4.1.11",
     "daisyui": "^5.0.43",
     "pixi.js": "8.9.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-router-dom": "^7.6.2",
     "socket.io-client": "4.8.1",
-    "tailwindcss": "^4.1.8"
+    "tailwindcss": "^4.1.11"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.5.0",
