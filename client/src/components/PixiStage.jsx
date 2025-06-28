@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
-import { Application, extend } from '@pixi/react';
+import { Application, extend, useTick } from '@pixi/react';
 import { Container, Graphics, Sprite, Texture, Assets, Text, extensions, ResizePlugin } from 'pixi.js';
 
 // Import sprite images (player + enemy)
@@ -145,19 +145,159 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   const effectsRef = useRef([]);
   const BLOOD_LIFE_MS = 700; // splash lasts this long
 
-  // local state counter to trigger re-render
-  const [, setFrameTick] = React.useState(0);
+  /****************************************************************
+   * ============================================================ *
+   *  PERFORMANCE PATCH –  remove 60 fps React renders           *
+   * ------------------------------------------------------------ *
+   *  We stop using requestAnimationFrame to bump React state on  *
+   *  every frame.  Instead an inner <UnitSprite> component       *
+   *  carries its own refs and updates its PIXI DisplayObjects    *
+   *  imperatively via useTick (Pixi 8).                          *
+   * ============================================================ *
+   ****************************************************************/
 
-  // force re-render every animation frame for smooth tweening
-  useEffect(() => {
-    let raf;
-    const tick = () => {
-      setFrameTick(f => f + 1);
-      raf = requestAnimationFrame(tick);
+  // Helper component responsible for one on-screen unit.  It does *not*
+  // trigger React renders while animating; all motion & HP tweening
+  // happen on the Pixi ticker.
+  const UnitSprite = React.memo(function UnitSprite({ unitId }) {
+    const containerRef = useRef();           // Main container for this unit
+    const hpBarRef = useRef();               // Graphics for HP bar
+
+    // Render static children once. Positions will be mutated imperatively.
+    const meta = metaRef.current.get(unitId);
+    const spriteKey = meta?.spriteKey ?? (meta?.type === 'enemy' ? 'goblin' : 'swordsman');
+    const texture = textures[spriteKey];
+    const baseSize = (texture?.width ?? 64);
+    const spriteScale = (UNIT_RADIUS * 2) / baseSize;
+
+    // Draw function for HP bar (called from ticker when ratio changes)
+    const drawHpBar = (g, ratio) => {
+      const barWidth = 0.08; // logical units
+      const barHeight = UNIT_RADIUS * 2;
+      const margin = 0.15;
+      const unitType = meta?.type === 'enemy' ? 'enemy' : 'player';
+      const barX = unitType === 'player'
+        ? -UNIT_RADIUS - margin - barWidth
+        :  UNIT_RADIUS + margin;
+      const barYTop = -UNIT_RADIUS;
+      g.clear();
+      // Background
+      g.beginFill(0x333333);
+      g.drawRect(barX, barYTop, barWidth, barHeight);
+      g.endFill();
+      // Fill (draw from bottom up)
+      const fillHeight = barHeight * ratio;
+      const fillY = barYTop + (barHeight - fillHeight);
+      g.beginFill(0x00ff00);
+      g.drawRect(barX, fillY, barWidth, fillHeight);
+      g.endFill();
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+
+    // Imperative animation loop – runs at display framerate without touching React
+    useTick(() => {
+      const now = Date.now();
+
+      const target = targetPosRef.current.get(unitId);
+      const prev = prevPosRef.current.get(unitId) || target;
+      const lastMove = moveTimeRef.current.get(unitId) || now;
+      const localT = Math.min(1, (now - lastMove) / ANIM_MS);
+
+      const interpX = prev.x + (target.x - prev.x) * localT;
+      const interpY = prev.y + (target.y - prev.y) * localT;
+
+      // Battle offset (re-use original logic)
+      let battleOffsetX = 0;
+      let battleOffsetY = 0;
+      const unitMeta = metaRef.current.get(unitId);
+      const unitType = unitMeta?.type === 'enemy' ? 'enemy' : 'player';
+
+      const RETURN_MS = 300;
+      if (unitMeta?.inBattle) {
+        const cycleMs = 1000;
+        const start = battleStartTimeRef.current.get(unitId) || now;
+        const phase = (((now - start) % cycleMs) / cycleMs);
+        const halfOffset = unitType === 'player' ? -0.25 : 0.25;
+        const cellCenterY = Math.floor(target.y) + 0.5;
+        let dirY = 0;
+        if (Math.abs(target.y - cellCenterY) > 0.01) {
+          dirY = target.y < cellCenterY ? -1 : 1;
+        }
+        const curveAmp = 0.06;
+        if (phase < 0.5) {
+          const p = phase * 2;
+          const ease = 1 - Math.pow(1 - p, 1.5);
+          battleOffsetX = -halfOffset * ease;
+          battleOffsetY = curveAmp * Math.sin(Math.PI * ease) * dirY;
+        } else {
+          const p = (phase - 0.5) * 2;
+          battleOffsetX = -halfOffset * (1 - p);
+          battleOffsetY = 0;
+        }
+      } else {
+        const endTime = battleEndTimeRef.current.get(unitId);
+        if (endTime) {
+          const elapsed = now - endTime;
+          if (elapsed < RETURN_MS) {
+            const startOff = battleReturnOffsetRef.current.get(unitId) || { x: 0, y: 0 };
+            const p = 1 - elapsed / RETURN_MS;
+            battleOffsetX = startOff.x * p;
+            battleOffsetY = startOff.y * p;
+          } else {
+            battleEndTimeRef.current.delete(unitId);
+            battleReturnOffsetRef.current.delete(unitId);
+          }
+        }
+      }
+
+      // Update container position
+      if (containerRef.current) {
+        containerRef.current.x = interpX + battleOffsetX;
+        containerRef.current.y = interpY + battleOffsetY;
+      }
+
+      // HP bar tween (reuse previous hpPrevRatio logic)
+      const ratioTarget = unitMeta ? Math.max(0, unitMeta.hp) / (unitMeta.maxHp || 1) : 1;
+      const prevRatioStored = hpPrevRatioRef.current.get(unitId);
+      if (prevRatioStored === undefined) {
+        hpPrevRatioRef.current.set(unitId, ratioTarget);
+      }
+      let ratioFrom = hpPrevRatioRef.current.get(unitId);
+      const animStartExisting = hpAnimStartRef.current.get(unitId);
+      const HP_ANIM_MS = 400;
+      if (!animStartExisting && ratioFrom > ratioTarget) {
+        hpAnimStartRef.current.set(unitId, now);
+      }
+      const animStart = hpAnimStartRef.current.get(unitId);
+      let ratio = ratioTarget;
+      if (animStart && ratioFrom !== undefined && ratioFrom > ratioTarget) {
+        const t = Math.min(1, (now - animStart) / HP_ANIM_MS);
+        ratio = ratioFrom + (ratioTarget - ratioFrom) * t;
+        if (t === 1) {
+          hpPrevRatioRef.current.set(unitId, ratioTarget);
+          hpAnimStartRef.current.delete(unitId);
+        }
+      }
+
+      // Redraw HP bar graphics
+      if (hpBarRef.current) drawHpBar(hpBarRef.current, ratio);
+
+      // when animation complete update prevPos so next tick interpolates correctly
+      if (localT === 1) {
+        prevPosRef.current.set(unitId, target);
+      }
+    });
+
+    return (
+      <pixiContainer ref={containerRef}>
+        <pixiSprite texture={texture} anchor={0.5} scale={spriteScale} />
+        <pixiGraphics ref={hpBarRef} draw={(g) => drawHpBar(g, 1)} />
+      </pixiContainer>
+    );
+  });
+
+  /*******************************
+   * Target recomputation logic  *
+   *******************************/
 
   // Utility to compute target positions for all units in current grid
   const computeTargets = () => {
@@ -177,8 +317,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
         const assignSide = (arr, side) => {
           const count = arr.length;
           if (!count) return;
-          // Available vertical span inside the side (±0.4 from centre)
-          const spacing = 0.8 / count;
+          const spacing = 0.8 / count; // vertical span inside side (±0.4)
 
           arr.forEach((unit, idx) => {
             const base = cellCenter(r, c, rows, cols);
@@ -210,33 +349,29 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
     return targets;
   };
 
-  // Update target positions when grid changes
+  // Light-weight counter used only to refresh React when unit set changes.
+  const [, forceRender] = React.useState(0);
+
+  // Update target positions whenever the grid changes
   useEffect(() => {
     const prevMetaSnapshot = new Map(metaRef.current);
     const newTargets = computeTargets();
 
-    // Detect battle start to initialise animation phase from 0
+    // Detect battle start/end (maintain animation timers)
     for (let [id, newMeta] of metaRef.current.entries()) {
       const prevMeta = prevMetaSnapshot.get(id);
       if (newMeta.inBattle && (!prevMeta || !prevMeta.inBattle)) {
         battleStartTimeRef.current.set(id, Date.now());
       }
-    }
-
-    // Detect battle end to start retreat tween
-    for (let [id, newMeta] of metaRef.current.entries()) {
-      const prevMeta = prevMetaSnapshot.get(id);
       if (prevMeta && prevMeta.inBattle && !newMeta.inBattle) {
         battleEndTimeRef.current.set(id, Date.now());
 
-        // Capture offset at battle end to ensure smooth return without snapping
         const target = targetPosRef.current.get(id);
         if (target) {
           const unitType = prevMeta.type || (id.startsWith('enemy') ? 'enemy' : 'player');
           const cycleMs = 1000;
           const start = battleStartTimeRef.current.get(id) || Date.now();
           const phase = (((Date.now() - start) % cycleMs) / cycleMs);
-
           const halfOffset = unitType === 'player' ? -0.25 : 0.25;
           const cellCenterY = Math.floor(target.y) + 0.5;
           let dirY = 0;
@@ -244,8 +379,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
             dirY = target.y < cellCenterY ? -1 : 1;
           }
           const curveAmp = 0.06;
-          let offX = 0;
-          let offY = 0;
+          let offX, offY;
           if (phase < 0.5) {
             const p = phase * 2;
             const ease = 1 - Math.pow(1 - p, 1.5);
@@ -261,29 +395,25 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       }
     }
 
-    // Iterate to update refs and detect movements
+    // Detect movements & update timestamps
     for (let [id, newPos] of newTargets.entries()) {
       const prevPos = targetPosRef.current.get(id);
       if (!prevPos) {
-        // new unit – start with no tween
         prevPosRef.current.set(id, { ...newPos });
         moveTimeRef.current.set(id, Date.now());
       } else if (prevPos.x !== newPos.x || prevPos.y !== newPos.y) {
-        // position changed – update prevPos and timestamp
         prevPosRef.current.set(id, { ...prevPos });
         moveTimeRef.current.set(id, Date.now());
       }
     }
 
-    // Remove data for units that disappeared
+    // Clean up data for units that disappeared
     for (let id of Array.from(targetPosRef.current.keys())) {
       if (!newTargets.has(id)) {
-        // Before purging, add a blood effect at last known position.
         const lastPos = targetPosRef.current.get(id) || prevPosRef.current.get(id);
         if (lastPos) {
           effectsRef.current.push({ x: lastPos.x, y: lastPos.y, start: Date.now() });
         }
-
         targetPosRef.current.delete(id);
         prevPosRef.current.delete(id);
         metaRef.current.delete(id);
@@ -296,15 +426,12 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       }
     }
 
-    // Finally replace targets and trigger an immediate re-render now that
-    // all refs reflect the latest grid. This guarantees the first frame
-    // after a grid update starts interpolating from the correct previous
-    // position instead of potentially drawing the unit at its new target
-    // location without tweening.
+    // Replace targets map
     targetPosRef.current = newTargets;
 
-    // Force a re-render so changes take effect right away.
-    setFrameTick(f => f + 1);
+    // Trigger a single React refresh so new/removed UnitSprite components
+    // are reconciled.  This runs once per server grid update, not every frame.
+    forceRender(c => c + 1);
   }, [grid, rows, cols]);
 
   /***************   Memoised Drawers   ****************/
@@ -376,140 +503,10 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
 
   /***************   Units Render   ****************/
   const renderUnits = () => {
-    const elements = [];
-    const now = Date.now();
-
-    for (let [id, target] of targetPosRef.current.entries()) {
-      const prev = prevPosRef.current.get(id) || target;
-      const lastMove = moveTimeRef.current.get(id) || now;
-      const localT = Math.min(1, (now - lastMove) / ANIM_MS);
-      const interpX = prev.x + (target.x - prev.x) * localT;
-      const interpY = prev.y + (target.y - prev.y) * localT;
-      const radius = UNIT_RADIUS;
-      const meta = metaRef.current.get(id);
-      const ratioTarget = meta ? Math.max(0, meta.hp) / (meta.maxHp || 1) : 1;
-      const nowRatioPrev = hpPrevRatioRef.current.get(id);
-      if (nowRatioPrev === undefined) {
-        hpPrevRatioRef.current.set(id, ratioTarget);
-      }
-      let ratioFrom = hpPrevRatioRef.current.get(id);
-      const animStartExisting = hpAnimStartRef.current.get(id);
-      if (!animStartExisting && ratioFrom > ratioTarget) {
-        // HP decreased – kick off animation only if not already animating
-        hpAnimStartRef.current.set(id, now);
-      }
-      const animStart = hpAnimStartRef.current.get(id);
-      let ratio = ratioTarget;
-      const HP_ANIM_MS = 400;
-      if (animStart && ratioFrom !== undefined && ratioFrom > ratioTarget) {
-        const t = Math.min(1, (now - animStart) / HP_ANIM_MS);
-        ratio = ratioFrom + (ratioTarget - ratioFrom) * t;
-        if (t === 1) {
-          hpPrevRatioRef.current.set(id, ratioTarget);
-          hpAnimStartRef.current.delete(id);
-        }
-      } else {
-        ratio = ratioTarget;
-      }
-      const unitType = meta?.type || (id.startsWith('enemy') ? 'enemy' : 'player');
-
-      // Battle animation: slow approach, fast curved retreat
-      let battleOffsetX = 0;
-      let battleOffsetY = 0;
-      const RETURN_MS = 300;
-
-      if (meta?.inBattle) {
-        const cycleMs = 1000; // server combat tick
-        const start = battleStartTimeRef.current.get(id) || now;
-        const phase = (((now - start) % cycleMs) / cycleMs);
-
-        const halfOffset = unitType === 'player' ? -0.25 : 0.25;
-
-        // Direction based on actual vertical position inside the cell
-        const cellCenterY = Math.floor(target.y) + 0.5;
-        let dirY = 0;
-        if (Math.abs(target.y - cellCenterY) > 0.01) {
-          dirY = target.y < cellCenterY ? -1 : 1;
-        }
-        const curveAmp = 0.06; // vertical curve on retreat
-
-        if (phase < 0.5) {
-          const p = phase * 2;
-          const ease = 1 - Math.pow(1 - p, 1.5);
-          battleOffsetX = -halfOffset * ease;
-          battleOffsetY = curveAmp * Math.sin(Math.PI * ease) * dirY;
-        } else {
-          const p = (phase - 0.5) * 2;
-          battleOffsetX = -halfOffset * (1 - p);
-          battleOffsetY = 0;
-        }
-      } else {
-        // Not in battle. Check if we just ended battle and need smooth return
-        const endTime = battleEndTimeRef.current.get(id);
-        if (endTime) {
-          const elapsed = now - endTime;
-          if (elapsed < RETURN_MS) {
-            const startOff = battleReturnOffsetRef.current.get(id) || { x: 0, y: 0 };
-            const p = 1 - elapsed / RETURN_MS; // 1 → 0
-            battleOffsetX = startOff.x * p;
-            battleOffsetY = startOff.y * p;
-          } else {
-            battleEndTimeRef.current.delete(id); // finished
-            battleReturnOffsetRef.current.delete(id);
-          }
-        }
-      }
-
-      // HP bar graphics: vertical bar on side (right for players, left for enemies)
-      const drawHpBar = (g) => {
-        g.clear();
-
-        const barWidth = 0.08; // logical units
-        const barHeight = radius * 2;
-        const margin = 0.15;
-
-        // Determine X position based on side
-        const barX = unitType === 'player'
-          ? -radius - margin - barWidth
-          : radius + margin;
-
-        const barYTop = -radius;
-
-        // Background
-        g.beginFill(0x333333);
-        g.drawRect(barX, barYTop, barWidth, barHeight);
-        g.endFill();
-
-        // Fill (draw from bottom up for intuitive drain effect)
-        const fillHeight = barHeight * ratio;
-        const fillY = barYTop + (barHeight - fillHeight);
-        g.beginFill(0x00ff00);
-        g.drawRect(barX, fillY, barWidth, fillHeight);
-        g.endFill();
-      };
-
-      const spriteTexture = textures[meta?.spriteKey] || textures[unitType === 'enemy' ? 'goblin' : 'swordsman'];
-
-      const baseSize = (spriteTexture?.width ?? 64);
-      const spriteScale = (radius * 2) / baseSize; // logical units
-
-      elements.push(
-        <pixiContainer key={id} x={interpX + battleOffsetX} y={interpY + battleOffsetY}>
-          <pixiSprite
-            texture={spriteTexture}
-            scale={spriteScale}
-            anchor={0.5}
-          />
-          <pixiGraphics draw={drawHpBar} />
-        </pixiContainer>
-      );
-
-      // when animation complete update prevPos
-      if (localT === 1) {
-        prevPosRef.current.set(id, target);
-      }
-    }
-    return elements;
+    if (!textures) return null;
+    return Array.from(targetPosRef.current.keys()).map((id) => (
+      <UnitSprite key={id} unitId={id} />
+    ));
   };
 
   const [textures, setTextures] = useState(null);

@@ -1,8 +1,10 @@
 // Movement.js - Handles movement of units on the grid each tick
 
 function moveEnemyUnits(grid, onCastleHit) {
-  // Traverse from right to left (columns-1 → 1) so a unit moved this tick isn't processed again
-  for (let col = grid.columns - 1; col >= 1; col--) {
+  // Traverse from LEFT to RIGHT (1 → columns-1). This ensures that after a
+  // unit moves one cell to the left it will not be evaluated again in the
+  // same tick because its new column index has already been processed.
+  for (let col = 1; col < grid.columns; col++) {
     for (let row = 0; row < grid.rows; row++) {
       const units = [...grid.getUnitsInCell(row, col).filter(u => u.type === 'enemy')];
       for (const unit of units) {
@@ -22,9 +24,11 @@ function moveEnemyUnits(grid, onCastleHit) {
           continue; // stay in place; player will move into us
         }
 
-        grid.removeUnitFromCell(unit.row, col, unit.id);
+        grid.removeUnitFromCell(row, col, unit.id);
 
         if (grid.isCastleCell(nextCol)) {
+          // Update unit position before calling callback so GameState.removeUnit works correctly
+          unit.col = nextCol;
           if (typeof onCastleHit === 'function') onCastleHit(unit, row);
         } else {
           unit.col = nextCol;
@@ -39,8 +43,10 @@ function moveEnemyUnits(grid, onCastleHit) {
 
 
 function movePlayerUnits(grid, onPortalReached) {
-  // Traverse from left to right (col 0 onwards), so a unit moved this tick isn't processed again.
-  for (let col = 0; col < grid.columns - 1; col++) {
+  // Traverse from RIGHT to LEFT (columns-2 → 0). After a unit steps to the
+  // right it lands on a column that has already been processed this tick,
+  // preventing multiple moves per cycle.
+  for (let col = grid.columns - 2; col >= 0; col--) {
     for (let row = 0; row < grid.rows; row++) {
       const units = [...grid.getUnitsInCell(row, col).filter(u => u.type === 'player')];
       for (const unit of units) {
@@ -59,9 +65,11 @@ function movePlayerUnits(grid, onPortalReached) {
         const nextCellUnits = grid.getUnitsInCell(row, nextCol);
 
         // Remove from current cell first
-        grid.removeUnitFromCell(unit.row, col, unit.id);
+        grid.removeUnitFromCell(row, col, unit.id);
 
         if (grid.isPortalCell(nextCol)) {
+          // Update unit position before calling callback so GameState.removeUnit works correctly
+          unit.col = nextCol;
           if (typeof onPortalReached === 'function') onPortalReached(unit, row);
         } else {
           unit.col = nextCol;
