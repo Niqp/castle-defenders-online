@@ -8,14 +8,15 @@ export class CountdownTicker {
     if (!this.onNextWave) return;
     if (this.gameState.nextWaveIn > 0) {
       this.gameState.nextWaveIn = Math.max(0, this.gameState.nextWaveIn - 1);
-      this.io.emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
+      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
       if (this.gameState.nextWaveIn === 0 && typeof this.onNextWave === 'function') {
         this.onNextWave();
       }
     }
   }
-  constructor(io, gameState, onNextWave) {
+  constructor(io, roomId, gameState, onNextWave) {
     this.io = io;
+    this.roomId = roomId;
     this.gameState = gameState;
     this.intervalId = null;
     this.timeoutIds = [];
@@ -28,7 +29,7 @@ export class CountdownTicker {
       try {
         if (spawning) return; // Prevent overlap
         this.gameState.nextWaveIn = Math.max(0, this.gameState.nextWaveIn - 1);
-        this.io.emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
+        this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
         if (this.gameState.nextWaveIn === 0 && typeof this.onNextWave === 'function') {
           spawning = true;
           console.log('[CountdownTicker] Spawning new wave...');

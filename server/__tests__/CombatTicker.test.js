@@ -9,9 +9,9 @@ describe('CombatTicker', () => {
     ticker = undefined;
   });
   it('can be constructed and stopped without error', () => {
-    const io = { emit: jest.fn() };
+    const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
     const gameState = new GameState(['Tester']);
-    const ticker = new CombatTicker(io, gameState);
+    const ticker = new CombatTicker(io, 'room', gameState);
     expect(ticker).toBeDefined();
     ticker.stop();
   });

@@ -3,8 +3,9 @@ import { EVENTS } from '../events.js';
 import { spawnEnemyUnit, spawnPlayerUnit } from '../game/Spawner.js';
 
 export class WaveSpawner {
-  constructor(io, gameState) {
+  constructor(io, roomId, gameState) {
     this.io = io;
+    this.roomId = roomId;
     this.gameState = gameState;
     this.intervalId = null;
   }
@@ -39,8 +40,8 @@ export class WaveSpawner {
         this.gameState.addUnit(enemy);
         newEnemies.push(enemy);
       }
-      this.io.emit(EVENTS.SPAWN_ENEMIES, { enemies: newEnemies });
-      this.io.emit(EVENTS.STATE_UPDATE, { wave: this.gameState.wave });
+      this.io.in(this.roomId).emit(EVENTS.SPAWN_ENEMIES, { enemies: newEnemies });
+      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { wave: this.gameState.wave });
       return newEnemies;
     } catch (err) {
       console.error('WaveSpawner error', err);

@@ -15,7 +15,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const socketRef = useRef(null);
   const navigate = useNavigate();
-  const ROOM_ID = 'main';
+  const [currentRoomId, setCurrentRoomId] = useState('');
 
   // Create or read a long-lived clientId and establish a socket connection.
   useEffect(() => {
@@ -83,12 +83,14 @@ export default function App() {
     };
   }, [playerName, navigate]); // Added playerName and navigate to dependency array
 
-  function handleJoin(name) {
+  function handleJoin(name, roomId) {
+    const rid = roomId.toUpperCase();
     setPlayerName(name);
+    setCurrentRoomId(rid);
     setReady(false); // Reset ready state on new join
     if (socketRef.current) {
-      socketRef.current.emit(EVENTS.CREATE_ROOM, ROOM_ID); // Consider if CREATE_ROOM is always needed or just JOIN_ROOM
-      socketRef.current.emit(EVENTS.JOIN_ROOM, ROOM_ID, name);
+      // Simply attempt to join; server will create the room if it does not exist.
+      socketRef.current.emit(EVENTS.JOIN_ROOM, rid, name);
     }
     navigate('/lobby');
   }

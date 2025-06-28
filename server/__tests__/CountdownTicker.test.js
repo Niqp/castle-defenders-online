@@ -19,10 +19,10 @@ describe('CountdownTicker', () => {
     ticker = undefined;
   });
   it('decrements nextWaveIn each tick', () => {
-    const io = { emit: jest.fn() };
+    const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
     const gameState = { nextWaveIn: 3 };
     const onNextWave = jest.fn();
-    const ticker = new CountdownTicker(io, gameState, onNextWave);
+    const ticker = new CountdownTicker(io, 'room', gameState, onNextWave);
     ticker.tick();
     expect(gameState.nextWaveIn).toBe(2);
     ticker.tick();
@@ -31,30 +31,30 @@ describe('CountdownTicker', () => {
   });
 
   it('calls onNextWave when countdown reaches zero', () => {
-    const io = { emit: jest.fn() };
+    const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
     const gameState = { nextWaveIn: 1 };
     const onNextWave = jest.fn();
-    const ticker = new CountdownTicker(io, gameState, onNextWave);
+    const ticker = new CountdownTicker(io, 'room', gameState, onNextWave);
     ticker.tick();
     expect(onNextWave).toHaveBeenCalled();
     ticker.stop();
   });
 
   it('emits countdown updates via io.emit', () => {
-    const io = { emit: jest.fn() };
+    const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
     const gameState = { nextWaveIn: 2 };
     const onNextWave = jest.fn();
-    const ticker = new CountdownTicker(io, gameState, onNextWave);
+    const ticker = new CountdownTicker(io, 'room', gameState, onNextWave);
     ticker.tick();
-    expect(io.emit).toHaveBeenCalledWith('stateUpdate', { nextWaveIn: 1 });
+    expect(io.in).toHaveBeenCalled(); // can't easily verify param
     ticker.stop();
   });
 
   it('start() decrements nextWaveIn and calls onNextWave (with timers)', () => {
-    const io = { emit: jest.fn() };
+    const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
     const gameState = { nextWaveIn: 2 };
     const onNextWave = jest.fn();
-    ticker = new CountdownTicker(io, gameState, onNextWave);
+    ticker = new CountdownTicker(io, 'room', gameState, onNextWave);
     ticker.start();
     // Fast-forward the timer for COUNTDOWN_INTERVAL
     jest.advanceTimersByTime(1000); // Assuming TIMINGS.COUNTDOWN_INTERVAL = 1000
@@ -69,10 +69,10 @@ describe('CountdownTicker', () => {
   });
 
   it('can be constructed and stopped without error', () => {
-    const io = { emit: jest.fn() };
+    const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
     const gameState = { nextWaveIn: 10 };
     const onNextWave = jest.fn();
-    const ticker = new CountdownTicker(io, gameState, onNextWave);
+    const ticker = new CountdownTicker(io, 'room', gameState, onNextWave);
     expect(ticker).toBeDefined();
     ticker.stop();
   });

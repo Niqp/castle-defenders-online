@@ -34,6 +34,49 @@ export class GameService {
 
   join(socket, name) {
     this.socketToName.set(socket.id, name);
+
+    // -----------------------------------------------------
+    // 1) Game already in progress ⇒ join immediately
+    // -----------------------------------------------------
+    if (this.gameState) {
+      // a) Extend GameState with new player/column
+      const col = this.gameState.addPlayer(name, 1000);
+      if (col < 0) {
+        // Player already present – just sync state
+        this.syncState(socket, name);
+        return;
+      }
+
+      // b) Initialise per-player resource tracking object
+      const newPlayerObj = {
+        name,
+        gold: 0,
+        food: 0,
+        iron: 0,
+        jewels: 0,
+        workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
+        units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0]))
+      };
+      this.gameState.players.push(newPlayerObj);
+
+      // c) Make sure future resource ticks include this player (array ref shared)
+      //    -> already handled because ResourceTicker keeps reference to players array
+
+      // d) Broadcast updated battlefield so existing players see new lane
+      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
+        castleHp: this.gameState.castleHealth,
+        grid: this.gameState.grid.cells,
+        players: this.gameState.players
+      });
+
+      // e) Finally, send full sync snapshot to the newcomer so their UI hydrates
+      this.syncState(socket, name);
+      return;
+    }
+
+    // -----------------------------------------------------
+    // 2) Game not started ⇒ normal lobby join flow
+    // -----------------------------------------------------
     if (!this.lobby.players.includes(name)) {
       this.lobby.players.push(name);
       this.lobby.ready.set(name, false);
@@ -128,13 +171,13 @@ export class GameService {
     });
     // Start modular tickers with new state
     this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
-    this.waveSpawner = new WaveSpawner(this.io, this.gameState);
-    this.countdownTicker = new CountdownTicker(this.io, this.gameState, () => {
+    this.waveSpawner = new WaveSpawner(this.io, this.roomId, this.gameState);
+    this.countdownTicker = new CountdownTicker(this.io, this.roomId, this.gameState, () => {
       this.waveSpawner.spawnWave();
       this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
     });
-    this.combatTicker = new CombatTicker(this.io, this.gameState);
+    this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState);
     this.resourceTicker.start();
     this.countdownTicker.start();
     this.combatTicker.start();

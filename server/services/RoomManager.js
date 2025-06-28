@@ -29,7 +29,11 @@ export class RoomManager {
   }
 
   joinRoom(socket, roomId, name) {
-    if (!this.rooms.has(roomId)) return;
+    // Auto-create the room on first join if it doesn't exist.
+    if (!this.rooms.has(roomId)) {
+      this.createRoom(roomId);
+    }
+
     const service = this.rooms.get(roomId);
     socket.join(roomId);
     this.socketToRoom.set(socket.id, roomId);

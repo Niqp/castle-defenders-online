@@ -54,6 +54,37 @@ class GameState {
       .filter(([col, name]) => this.isPlayerAlive(name))
       .map(([col]) => Number(col));
   }
+
+  /**
+   * Dynamically adds a new player mid-game. A new column will be appended to the
+   * right side of the grid so that existing columns keep their indices.
+   *
+   * @param {string} name – Logical player name (must be unique).
+   * @param {number} initialCastleHp – Starting HP for the new player.
+   * @returns {number} The column index assigned to the new player or -1 if the
+   *                   player already exists.
+   */
+  addPlayer(name, initialCastleHp = 1000) {
+    if (this.playerNames.includes(name)) return -1;
+
+    this.playerNames.push(name);
+    this.playerCount = this.playerNames.length;
+
+    // Expand the grid so every player still owns exactly one dedicated lane.
+    this.grid.setPlayerCount(this.playerCount);
+
+    // Assign the right-most column to the new player so existing lanes remain
+    // unchanged (this avoids shifting units already on the battlefield).
+    const newCol = this.playerCount - 1;
+
+    this.playerToCol[name] = newCol;
+    this.colToPlayer[newCol] = name;
+
+    // Track castle HP for the newcomer.
+    this.castleHealth[name] = initialCastleHp;
+
+    return newCol;
+  }
 }
 
 export default GameState;

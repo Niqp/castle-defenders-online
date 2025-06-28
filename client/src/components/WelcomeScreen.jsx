@@ -2,19 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 
 export default function WelcomeScreen({ onJoin }) {
   const [name, setName] = useState('');
-  const inputRef = useRef(null);
+  const [room, setRoom] = useState('');
+  const nameInputRef = useRef(null);
+  const roomInputRef = useRef(null);
 
+  // Focus the name field on mount
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    nameInputRef.current?.focus();
   }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      onJoin(name.trim());
-    }
+    const trimmedName = name.trim();
+    const trimmedRoom = room.trim().toUpperCase();
+    if (!trimmedName || trimmedRoom.length !== 4) return;
+    onJoin(trimmedName, trimmedRoom);
   };
 
   return (
@@ -32,10 +34,10 @@ export default function WelcomeScreen({ onJoin }) {
               <label className="input input-bordered input-primary w-full flex items-center gap-2">
                 <span className="text-base-content-secondary font-semibold tracking-wide text-sm sm:text-base">Your Name</span>
                 <input
-                  id="player-name" // ID is still useful for refs and accessibility
-                  ref={inputRef}
+                  id="player-name"
+                  ref={nameInputRef}
                   type="text"
-                  placeholder="Enter your name" // This will appear after the "Your Name" prefix
+                  placeholder="Enter your name"
                   value={name}
                   onInput={(e) => setName(e.target.value)}
                   maxLength={16}
@@ -44,9 +46,25 @@ export default function WelcomeScreen({ onJoin }) {
                 />
               </label>
             </div>
+            <div className="form-control">
+              <label className="input input-bordered input-secondary w-full flex items-center gap-2">
+                <span className="text-base-content-secondary font-semibold tracking-wide text-sm sm:text-base">Room&nbsp;Code</span>
+                <input
+                  id="room-code"
+                  ref={roomInputRef}
+                  type="text"
+                  placeholder="ABCD"
+                  value={room}
+                  onInput={(e) => setRoom(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
+                  maxLength={4}
+                  className="grow placeholder:text-base-content/50 bg-transparent uppercase tracking-widest focus:outline-none focus:ring-0 border-none"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
             <button
               type="submit"
-              disabled={!name.trim()}
+              disabled={!name.trim() || room.length !== 4}
               className="btn btn-primary w-full text-lg font-cinzel font-bold tracking-wider uppercase"
             >
               Join Battle

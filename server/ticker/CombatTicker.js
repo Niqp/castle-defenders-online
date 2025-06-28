@@ -4,8 +4,9 @@ import * as Movement from '../game/Movement.js';
 import * as Battle from '../game/Battle.js';
 
 export class CombatTicker {
-  constructor(io, gameState) {
+  constructor(io, roomId, gameState) {
     this.io = io;
+    this.roomId = roomId;
     this.gameState = gameState;
     this.intervalId = null;
   }
@@ -35,7 +36,7 @@ export class CombatTicker {
         // Emit current grid state (after movement & new spawns) so clients display units immediately.
         // HP values are still intact because damage hasn't been processed yet, so bars remain full until the
         // mid-tick damage pass.
-        this.io.emit(EVENTS.STATE_UPDATE, {
+        this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
           castleHp: this.gameState.castleHealth,
           grid: JSON.parse(JSON.stringify(this.gameState.grid.cells))
         });
@@ -56,14 +57,14 @@ export class CombatTicker {
             }
 
             // Emit updated state after damage has been applied
-            this.io.emit(EVENTS.STATE_UPDATE, {
+            this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
               castleHp: this.gameState.castleHealth,
               grid: JSON.parse(JSON.stringify(this.gameState.grid.cells))
             });
 
             // Game-over check (after damage)
             if (!this.gameState.areAnyCastlesAlive()) {
-              this.io.emit(EVENTS.GAME_OVER, { message: 'All castles have fallen!', stats: { wave: this.gameState.wave } });
+              this.io.in(this.roomId).emit(EVENTS.GAME_OVER, { message: 'All castles have fallen!', stats: { wave: this.gameState.wave } });
               this.stop();
             }
           } catch (err) {
