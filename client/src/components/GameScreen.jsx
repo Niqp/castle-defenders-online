@@ -259,7 +259,13 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     for (const row of grid) {
       if (!Array.isArray(row)) continue;
       for (const cell of row) {
-        const unitsInCell = Array.isArray(cell) ? cell : (cell ? [cell] : []);
+        // Extract units correctly from the new grid structure
+        let unitsInCell = [];
+        if (Array.isArray(cell)) {
+          unitsInCell = cell;
+        } else if (cell && cell.type && (cell.type === 'castle' || cell.type === 'portal') && cell.units) {
+          unitsInCell = cell.units;
+        }
         for (const u of unitsInCell) {
           if (u && u.type === 'player' && u.owner === playerName) {
             const key = u.unitType || 'Unknown';

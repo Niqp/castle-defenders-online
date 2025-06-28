@@ -29,6 +29,8 @@ function moveEnemyUnits(grid, onCastleHit) {
         if (grid.isCastleCell(nextCol)) {
           // Update unit position before calling callback so GameState.removeUnit works correctly
           unit.col = nextCol;
+          // Add unit to castle cell so GameState.removeUnit can find and remove it
+          grid.addUnitToCell(row, nextCol, unit);
           if (typeof onCastleHit === 'function') onCastleHit(unit, row);
         } else {
           unit.col = nextCol;

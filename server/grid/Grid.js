@@ -85,16 +85,38 @@ class Grid {
     const cell = this.getCell(row, col);
     if (Array.isArray(cell)) return cell;
     if (cell == null) return [];
+    // Don't treat castle/portal structural markers as units
+    if (cell.type === 'castle' || cell.type === 'portal') {
+      // Check if it has units array (new structure)
+      return cell.units || [];
+    }
     return [cell];
   }
 
   // Place a unit in a cell (supports multiple units per cell)
   addUnitToCell(row, col, unit) {
     if (!this.isValidCell(row, col)) return false;
-    if (!Array.isArray(this.cells[row][col])) {
-      this.cells[row][col] = [];
+    const cell = this.cells[row][col];
+    
+    // If it's a castle or portal cell, we need to preserve the marker
+    if (cell && cell.type && (cell.type === 'castle' || cell.type === 'portal')) {
+      if (cell.units) {
+        // Already has units, just add to the array
+        cell.units.push(unit);
+      } else {
+        // Convert to a special structure that preserves the marker
+        this.cells[row][col] = {
+          type: cell.type,
+          units: [unit]
+        };
+      }
+    } else if (Array.isArray(cell)) {
+      // Regular cell with units
+      cell.push(unit);
+    } else {
+      // Empty cell, create array
+      this.cells[row][col] = [unit];
     }
-    this.cells[row][col].push(unit);
     return true;
   }
 
@@ -102,8 +124,20 @@ class Grid {
   removeUnitFromCell(row, col, unitId) {
     if (!this.isValidCell(row, col)) return false;
     let cell = this.cells[row][col];
-    if (!Array.isArray(cell)) return false;
-    this.cells[row][col] = cell.filter(u => u.id !== unitId);
+    
+    if (Array.isArray(cell)) {
+      // Regular cell with units
+      this.cells[row][col] = cell.filter(u => u.id !== unitId);
+    } else if (cell && cell.type && cell.units) {
+      // Castle/portal cell with units
+      cell.units = cell.units.filter(u => u.id !== unitId);
+      // If no units left, revert to simple marker
+      if (cell.units.length === 0) {
+        this.cells[row][col] = { type: cell.type };
+      }
+    } else {
+      return false;
+    }
     return true;
   }
 

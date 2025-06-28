@@ -307,7 +307,13 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       const rowArr = Array.isArray(grid[r]) ? grid[r] : [];
       for (let c = 0; c < cols; c++) {
         const cell = rowArr[c];
-        const units = Array.isArray(cell) ? cell : cell ? [cell] : [];
+        // Extract units correctly from the new grid structure
+        let units = [];
+        if (Array.isArray(cell)) {
+          units = cell;
+        } else if (cell && cell.type && (cell.type === 'castle' || cell.type === 'portal') && cell.units) {
+          units = cell.units;
+        }
         if (!units.length) continue;
         const players = units.filter(u => u.type === 'player');
         const enemies = units.filter(u => u.type === 'enemy');
