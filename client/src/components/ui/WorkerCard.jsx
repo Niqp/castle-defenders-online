@@ -245,7 +245,11 @@ export default function WorkerCard({
   useEffect(() => {
     const target = Math.min(worker.current, MAX_WORKERS);
     const arr = workersRef.current;
-    while (arr.length < target) arr.push({ startTime: performance.now() });
+    while (arr.length < target) {
+      // Give each worker a random start time offset so they don't move in sync
+      const randomOffset = Math.random() * 3000; // 0-3000ms random offset
+      arr.push({ startTime: performance.now() - randomOffset });
+    }
     while (arr.length > target) arr.pop();
     
     // Update animation context
@@ -306,7 +310,8 @@ export default function WorkerCard({
         ref={canvasRef}
         width={canvasSize.w}
         height={canvasSize.h}
-        className="block"
+        className="block pointer-events-none"
+        style={{ touchAction: 'pan-y' }}
       />
 
       {/* Bottom bar */}
