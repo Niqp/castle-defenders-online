@@ -222,10 +222,23 @@ export class GameService {
   }
 
   _emitResourceUpdate(socket, player) {
+    // Prepare all players' resources for broadcasting
+    const allPlayersResources = {};
+    if (this.gameState && this.gameState.players) {
+      this.gameState.players.forEach(p => {
+        allPlayersResources[p.name] = {
+          gold: Math.floor(p.gold),
+          food: Math.floor(p.food),
+          workers: p.workers
+        };
+      });
+    }
+
     socket.emit(EVENTS.RESOURCE_UPDATE, {
       gold: Math.floor(player.gold),
       food: Math.floor(player.food),
-      workers: player.workers
+      workers: player.workers,
+      allPlayersResources: allPlayersResources
     });
   }
 

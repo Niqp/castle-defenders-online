@@ -40,6 +40,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const [units, setUnits] = useState(gameState?.units ?? []); // Assuming units are player-controlled units on the map
   const [wave, setWave] = useState(gameState?.wave ?? 1);
   const [grid, setGrid] = useState(gameState?.grid ?? []);
+  const [allPlayersResources, setAllPlayersResources] = useState({});
 
   const prevEnemiesRef = useRef(gameState?.enemies ?? []);
   const lastUpdateRef = useRef(Date.now());
@@ -64,6 +65,8 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
         if (data.gold !== undefined) setGold(data.gold);
         if (data.food !== undefined) setFood(data.food);
         if (data.workers) setWorkers(prev => ({...prev, ...data.workers}));
+        // Store all players' resources if provided
+        if (data.allPlayersResources) setAllPlayersResources(data.allPlayersResources);
       }
     });
     socket.on('unitUpdate', (data) => {
@@ -296,6 +299,29 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     });
   };
 
+  // Calculate resource per tick based on workers
+  const calculateResourcePerTick = (workerCounts, workerTypes) => {
+    const resourcePerTick = { gold: 0, food: 0 };
+    
+    if (!workerTypes || !workerCounts) return resourcePerTick;
+    
+    Object.entries(workerTypes).forEach(([type, config]) => {
+      const count = workerCounts[type] || 0;
+      if (count > 0 && config.outputs) {
+        Object.entries(config.outputs).forEach(([resource, amount]) => {
+          resourcePerTick[resource] = (resourcePerTick[resource] || 0) + (count * amount);
+        });
+      }
+    });
+    
+    return resourcePerTick;
+  };
+
+  // Calculate current player's resource per tick
+  const currentPlayerResourcePerTick = useMemo(() => {
+    return calculateResourcePerTick(workers, gameState?.workerTypes);
+  }, [workers, gameState?.workerTypes]);
+
   return (
     <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content relative">
       {/* Header Navbar */}
@@ -307,12 +333,18 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               <span className="flex items-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-yellow-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
                 {gold}
+                {currentPlayerResourcePerTick.gold > 0 && (
+                  <span className="text-xs text-yellow-300 ml-1">(+{currentPlayerResourcePerTick.gold})</span>
+                )}
               </span>
             </div>
             <div className="tooltip tooltip-bottom" data-tip="Food">
               <span className="flex items-center">
                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5A1.5 1.5 0 0111.5 5v1.781l-.003.002-.002.002A5.5 5.5 0 006.5 11H6v2.5a1.5 1.5 0 003 0V11h2v2.5a1.5 1.5 0 003 0V11h.5a5.5 5.5 0 00-2.504-4.715L13.5 5A1.5 1.5 0 0115 3.5V2a1 1 0 00-1-1h-4a1 1 0 00-1 1v1.5zM6.5 9a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm7 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" /></svg>
                 {food}
+                {currentPlayerResourcePerTick.food > 0 && (
+                  <span className="text-xs text-green-400 ml-1">(+{currentPlayerResourcePerTick.food})</span>
+                )}
               </span>
             </div>
           </div>
@@ -469,7 +501,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                 <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(aliveUnitCounts).reduce((a, b) => a + b, 0)}</span></div>
               </div>
               <hr className="my-1 opacity-50" />
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {(() => {
                   // Determine display order based on lane (players array order)
                   const orderedNames = Array.isArray(gameState?.players)
@@ -477,11 +509,38 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     : Object.keys(castleHp);
                   return orderedNames.map((name, idx) => {
                     const hp = castleHp[name] ?? 0;
+                    const playerResources = name === playerName 
+                      ? { gold, food, workers }
+                      : allPlayersResources[name];
+                    const playerResourcePerTick = playerResources
+                      ? calculateResourcePerTick(playerResources.workers, gameState?.workerTypes)
+                      : { gold: 0, food: 0 };
+                    
                     return (
-                      <div key={name} className="flex justify-between items-center text-xs sm:text-sm">
-                        <span className={`${name===playerName ? 'font-bold' : ''} mr-1 whitespace-nowrap`}>{idx + 1}. {name}</span>
-                        <progress className="progress progress-error flex-grow mx-1" value={hp} max={MAX_CASTLE_HP}></progress>
-                        <span className="ml-1">{hp}</span>
+                      <div key={name} className="bg-base-200 p-2 rounded">
+                        <div className="flex justify-between items-center text-xs sm:text-sm mb-1">
+                          <span className={`${name===playerName ? 'font-bold' : ''} mr-1 whitespace-nowrap`}>{idx + 1}. {name}</span>
+                          <progress className="progress progress-error flex-grow mx-1" value={hp} max={MAX_CASTLE_HP}></progress>
+                          <span className="ml-1">{hp}</span>
+                        </div>
+                        {playerResources && (
+                          <div className="flex justify-between text-xs text-base-content/70">
+                            <span className="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-yellow-400" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
+                              {Math.floor(playerResources.gold || 0)}
+                              {playerResourcePerTick.gold > 0 && (
+                                <span className="text-yellow-300 ml-1">(+{playerResourcePerTick.gold})</span>
+                              )}
+                            </span>
+                            <span className="flex items-center">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 text-green-500" viewBox="0 0 20 20" fill="currentColor"><path d="M10 3.5A1.5 1.5 0 0111.5 5v1.781l-.003.002-.002.002A5.5 5.5 0 006.5 11H6v2.5a1.5 1.5 0 003 0V11h2v2.5a1.5 1.5 0 003 0V11h.5a5.5 5.5 0 00-2.504-4.715L13.5 5A1.5 1.5 0 0115 3.5V2a1 1 0 00-1-1h-4a1 1 0 00-1 1v1.5zM6.5 9a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm7 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" /></svg>
+                              {Math.floor(playerResources.food || 0)}
+                              {playerResourcePerTick.food > 0 && (
+                                <span className="text-green-400 ml-1">(+{playerResourcePerTick.food})</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   });

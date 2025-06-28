@@ -19,12 +19,23 @@ export class ResourceTicker {
         for (const [res, amount] of Object.entries(incomeMap)) {
           p[res] = (p[res] || 0) + amount;
         }
+        // Prepare all players' resources for broadcasting
+        const allPlayersResources = {};
+        this.players.forEach(player => {
+          allPlayersResources[player.name] = {
+            gold: Math.floor(player.gold),
+            food: Math.floor(player.food),
+            workers: player.workers
+          };
+        });
+
         for (let [id, name] of this.socketToName.entries()) {
           if (name === p.name) {
             this.io.to(id).emit(EVENTS.RESOURCE_UPDATE, {
               gold: Math.floor(p.gold),
               food: Math.floor(p.food),
-              workers: p.workers
+              workers: p.workers,
+              allPlayersResources: allPlayersResources
             });
             break;
           }
@@ -57,12 +68,23 @@ export class ResourceTicker {
           for (const [res, amt] of Object.entries(incomeMap)) {
             p[res] = (p[res] || 0) + amt;
           }
+          // Prepare all players' resources for broadcasting
+          const allPlayersResources = {};
+          this.players.forEach(player => {
+            allPlayersResources[player.name] = {
+              gold: Math.floor(player.gold),
+              food: Math.floor(player.food),
+              workers: player.workers
+            };
+          });
+
           for (let [id, name] of this.socketToName.entries()) {
             if (name === p.name) {
               this.io.to(id).emit(EVENTS.RESOURCE_UPDATE, {
                 gold: Math.floor(p.gold),
                 food: Math.floor(p.food),
-                workers: p.workers
+                workers: p.workers,
+                allPlayersResources: allPlayersResources
               });
               break;
             }
