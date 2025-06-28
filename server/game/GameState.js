@@ -1,28 +1,28 @@
 // GameState.js - Holds main game state, grid, and per-player castle health tracking
-import Grid, { DEFAULT_ROWS } from '../grid/Grid.js';
+import Grid, { DEFAULT_COLUMNS } from '../grid/Grid.js';
 
 class GameState {
   /**
-   * @param {string[]} playerNames – Ordered list of players. Each gets a dedicated column.
-   * @param {number} rows – Grid rows (default DEFAULT_ROWS)
+   * @param {string[]} playerNames – Ordered list of players. Each gets a dedicated row.
+   * @param {number} columns – Grid columns (default DEFAULT_COLUMNS)
    * @param {number} initialCastleHp – Starting HP for every castle
    */
-  constructor(playerNames = [], rows = DEFAULT_ROWS, initialCastleHp = 100) {
+  constructor(playerNames = [], columns = DEFAULT_COLUMNS, initialCastleHp = 100) {
     if (!Array.isArray(playerNames)) {
       throw new Error('GameState expects an array of playerNames');
     }
     this.playerNames = playerNames;
     this.playerCount = playerNames.length;
 
-    // Grid columns match player count so each player has one lane
-    this.grid = new Grid(this.playerCount, rows);
+    // Grid rows match player count so each player has one lane
+    this.grid = new Grid(this.playerCount, columns);
 
     // Per-player HP map
     this.castleHealth = Object.fromEntries(playerNames.map((n) => [n, initialCastleHp]));
 
-    // Column ↔ player look-ups
-    this.playerToCol = Object.fromEntries(playerNames.map((n, i) => [n, i]));
-    this.colToPlayer = Object.fromEntries(playerNames.map((n, i) => [i, n]));
+    // Row ↔ player look-ups
+    this.playerToRow = Object.fromEntries(playerNames.map((n, i) => [n, i]));
+    this.rowToPlayer = Object.fromEntries(playerNames.map((n, i) => [i, n]));
 
     // Global unit registry
     this.units = new Map();
@@ -38,8 +38,8 @@ class GameState {
   }
 
   /* ───────────── Castle HP ───────────── */
-  applyCastleDamage(col, dmg) {
-    const player = this.colToPlayer[col];
+  applyCastleDamage(row, dmg) {
+    const player = this.rowToPlayer[row];
     if (!player) return;
     this.castleHealth[player] = Math.max(0, this.castleHealth[player] - dmg);
   }
@@ -49,19 +49,19 @@ class GameState {
   areAnyCastlesAlive() {
     return Object.values(this.castleHealth).some((hp) => hp > 0);
   }
-  getAliveColumns() {
-    return Object.entries(this.colToPlayer)
-      .filter(([col, name]) => this.isPlayerAlive(name))
-      .map(([col]) => Number(col));
+  getAliveRows() {
+    return Object.entries(this.rowToPlayer)
+      .filter(([row, name]) => this.isPlayerAlive(name))
+      .map(([row]) => Number(row));
   }
 
   /**
-   * Dynamically adds a new player mid-game. A new column will be appended to the
-   * right side of the grid so that existing columns keep their indices.
+   * Dynamically adds a new player mid-game. A new row will be appended to the
+   * bottom of the grid so that existing rows keep their indices.
    *
    * @param {string} name – Logical player name (must be unique).
    * @param {number} initialCastleHp – Starting HP for the new player.
-   * @returns {number} The column index assigned to the new player or -1 if the
+   * @returns {number} The row index assigned to the new player or -1 if the
    *                   player already exists.
    */
   addPlayer(name, initialCastleHp = 1000) {
@@ -73,17 +73,17 @@ class GameState {
     // Expand the grid so every player still owns exactly one dedicated lane.
     this.grid.setPlayerCount(this.playerCount);
 
-    // Assign the right-most column to the new player so existing lanes remain
+    // Assign the bottom-most row to the new player so existing lanes remain
     // unchanged (this avoids shifting units already on the battlefield).
-    const newCol = this.playerCount - 1;
+    const newRow = this.playerCount - 1;
 
-    this.playerToCol[name] = newCol;
-    this.colToPlayer[newCol] = name;
+    this.playerToRow[name] = newRow;
+    this.rowToPlayer[newRow] = name;
 
     // Track castle HP for the newcomer.
     this.castleHealth[name] = initialCastleHp;
 
-    return newCol;
+    return newRow;
   }
 }
 

@@ -38,12 +38,12 @@ extensions.add(ResizePlugin);
 /******************************
  * Utility helpers            *
  ******************************/
-// After a 90° anticlockwise rotation, logical X axis corresponds to original rows (left←→right),
-// and logical Y axis corresponds to original columns (top↕︎bottom).  The castle column is now at X=0,
-// and the portal column at X=rows-1.
+// With the new coordinate system, logical X axis corresponds to columns (left←→right),
+// and logical Y axis corresponds to rows (top↕︎bottom). The castle is now at X=0,
+// and the portal is at X=columns-1.
 const cellCenter = (row, col, rows, cols) => ({
-  x: rows - 1 - row + 0.5,   // rows run right → left after rotation
-  y: col + 0.5               // columns become vertical axis (top → bottom)
+  x: col + 0.5,              // columns run left → right
+  y: row + 0.5               // rows become vertical axis (top → bottom)
 });
 
 const offsetWithinCell = (index, total, radius) => {
@@ -78,9 +78,9 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   const rows = grid && grid.length ? grid.length : 1;
   const cols = grid && grid.length && Array.isArray(grid[0]) ? grid[0].length : 1;
 
-  // Logical board width/height after rotation
-  const logicalWidth = rows;
-  const logicalHeight = cols;
+  // Logical board width/height with new coordinate system
+  const logicalWidth = cols;
+  const logicalHeight = rows;
 
   // Responsive scaling: on mobile we prioritise height so the full vertical board is visible
   // and allow horizontal scrolling. On larger viewports we keep the previous "fit" behaviour.
@@ -311,7 +311,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   const drawPortalColumn = useMemo(() => (g) => {
     g.clear();
     g.beginFill(0x663399);
-    // Rightmost column after rotation
+    // Rightmost column
     g.drawRect(logicalWidth - 1, 0, 1, logicalHeight);
     g.endFill();
   }, [logicalWidth, logicalHeight]);
@@ -319,7 +319,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   const drawCastleColumn = useMemo(() => (g) => {
     g.clear();
     g.beginFill(0x336699);
-    // Leftmost column after rotation
+    // Leftmost column
     g.drawRect(0, 0, 1, logicalHeight);
     g.endFill();
   }, [logicalHeight]);
@@ -328,13 +328,13 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
     g.clear();
     const lineColor = 0xffffff;
     const lineW = 0.04; // logical units (≈2px after scale≈50)
-    // verticals (columns in rotated view)
+    // verticals (columns)
     for (let x = 0; x <= logicalWidth; x++) {
       g.beginFill(lineColor);
       g.drawRect(x - lineW / 2, 0, lineW, logicalHeight);
       g.endFill();
     }
-    // horizontals (rows in rotated view)
+    // horizontals (rows)
     for (let y = 0; y <= logicalHeight; y++) {
       g.beginFill(lineColor);
       g.drawRect(0, y - lineW / 2, logicalWidth, lineW);
@@ -343,7 +343,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   }, [logicalWidth, logicalHeight]);
 
   const renderRowNumbers = () => {
-    // Display numeric labels for each visual row (original column index)
+    // Display numeric labels for each row
     const elements = [];
     // Scale text inversely so it stays a constant pixel size regardless of board scaling
     const textScale = 1 / scale;

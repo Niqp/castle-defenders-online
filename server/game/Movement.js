@@ -1,9 +1,9 @@
 // Movement.js - Handles movement of units on the grid each tick
 
 function moveEnemyUnits(grid, onCastleHit) {
-  // Traverse from bottom-up (rows-2 → 0) so a unit moved this tick isn't processed again
-  for (let row = grid.rows - 2; row >= 0; row--) {
-    for (let col = 0; col < grid.columns; col++) {
+  // Traverse from right to left (columns-1 → 1) so a unit moved this tick isn't processed again
+  for (let col = grid.columns - 1; col >= 1; col--) {
+    for (let row = 0; row < grid.rows; row++) {
       const units = [...grid.getUnitsInCell(row, col).filter(u => u.type === 'enemy')];
       for (const unit of units) {
         if (unit.justSpawned) {
@@ -12,23 +12,23 @@ function moveEnemyUnits(grid, onCastleHit) {
           continue;
         }
         if (unit.inBattle) continue;
-        if (grid.isCastleCell(unit.row)) continue;
+        if (grid.isCastleCell(unit.col)) continue;
 
-        const nextRow = unit.row + 1;
+        const nextCol = unit.col - 1;
 
         // If the next cell contains any player unit, stop here and let battle start
-        const nextCellUnits = grid.getUnitsInCell(nextRow, col);
+        const nextCellUnits = grid.getUnitsInCell(row, nextCol);
         if (nextCellUnits.some(u => u.type === 'player')) {
           continue; // stay in place; player will move into us
         }
 
         grid.removeUnitFromCell(unit.row, col, unit.id);
 
-        if (grid.isCastleCell(nextRow)) {
-          if (typeof onCastleHit === 'function') onCastleHit(unit, col);
+        if (grid.isCastleCell(nextCol)) {
+          if (typeof onCastleHit === 'function') onCastleHit(unit, row);
         } else {
-          unit.row = nextRow;
-          grid.addUnitToCell(nextRow, col, unit);
+          unit.col = nextCol;
+          grid.addUnitToCell(row, nextCol, unit);
         }
       }
     }
@@ -39,9 +39,9 @@ function moveEnemyUnits(grid, onCastleHit) {
 
 
 function movePlayerUnits(grid, onPortalReached) {
-  // Traverse from top (row 1) downwards, so a unit moved this tick isn't processed again.
-  for (let row = 1; row < grid.rows; row++) {
-    for (let col = 0; col < grid.columns; col++) {
+  // Traverse from left to right (col 0 onwards), so a unit moved this tick isn't processed again.
+  for (let col = 0; col < grid.columns - 1; col++) {
+    for (let row = 0; row < grid.rows; row++) {
       const units = [...grid.getUnitsInCell(row, col).filter(u => u.type === 'player')];
       for (const unit of units) {
         if (unit.justSpawned) {
@@ -50,22 +50,22 @@ function movePlayerUnits(grid, onPortalReached) {
         }
         if (unit.inBattle) continue;
 
-        const nextRow = unit.row - 1;
+        const nextCol = unit.col + 1;
 
-        // Already at portal row? (shouldn't happen; handled below)
-        if (grid.isPortalCell(unit.row)) continue;
+        // Already at portal column? (shouldn't happen; handled below)
+        if (grid.isPortalCell(unit.col)) continue;
 
         // If the next cell contains an enemy, move into that cell to start battle.
-        const nextCellUnits = grid.getUnitsInCell(nextRow, col);
+        const nextCellUnits = grid.getUnitsInCell(row, nextCol);
 
         // Remove from current cell first
         grid.removeUnitFromCell(unit.row, col, unit.id);
 
-        if (grid.isPortalCell(nextRow)) {
-          if (typeof onPortalReached === 'function') onPortalReached(unit, col);
+        if (grid.isPortalCell(nextCol)) {
+          if (typeof onPortalReached === 'function') onPortalReached(unit, row);
         } else {
-          unit.row = nextRow;
-          grid.addUnitToCell(nextRow, col, unit);
+          unit.col = nextCol;
+          grid.addUnitToCell(row, nextCol, unit);
         }
       }
     }

@@ -13,7 +13,7 @@ describe('WaveSpawner', () => {
   });
   it('can be constructed', () => {
     const io = { emit: jest.fn(), in: jest.fn(() => ({ emit: jest.fn() })) };
-    const gameState = { wave: 0, grid: { columns: 3, rows: 5, getAliveColumns: () => [0,1,2] }, addUnit: jest.fn(), getAliveColumns: () => [0,1,2] };
+    const gameState = { wave: 0, grid: { columns: 12, rows: 3, getAliveRows: () => [0,1,2] }, addUnit: jest.fn(), getAliveRows: () => [0,1,2] };
     const spawner = new WaveSpawner(io, 'room', gameState);
     expect(spawner).toBeDefined();
   });

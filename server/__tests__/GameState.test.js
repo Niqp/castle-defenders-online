@@ -23,10 +23,10 @@ describe('GameState', () => {
     expect(gs.units.has(unit.id)).toBe(false);
   });
 
-  it('applies column-specific castle damage and alive checks', () => {
+  it('applies row-specific castle damage and alive checks', () => {
     const players=['A','B'];
     const gs = new GameState(players, 12, 100);
-    gs.applyCastleDamage(1,30); // column 1 belongs to player B
+    gs.applyCastleDamage(1,30); // row 1 belongs to player B
     expect(gs.castleHealth['B']).toBe(70);
     expect(gs.castleHealth['A']).toBe(100);
     gs.applyCastleDamage(1,100);

@@ -7,8 +7,8 @@ function randomElement(arr) {
 
 // Assigns battles for units sharing a cell
 function checkAndStartBattles(grid) {
-  for (let row = 1; row < grid.rows - 1; row++) {
-    for (let col = 0; col < grid.columns; col++) {
+  for (let col = 1; col < grid.columns - 1; col++) {
+    for (let row = 0; row < grid.rows; row++) {
       const units = grid.getUnitsInCell(row, col);
       const enemies = units.filter(u => u.type === 'enemy' && u.isAlive());
       const players = units.filter(u => u.type === 'player' && u.isAlive());
@@ -33,8 +33,8 @@ function checkAndStartBattles(grid) {
 
 // Processes battle logic: apply damage, switch targets, exit battle if no enemies remain
 function processBattles(grid) {
-  for (let row = 1; row < grid.rows - 1; row++) {
-    for (let col = 0; col < grid.columns; col++) {
+  for (let col = 1; col < grid.columns - 1; col++) {
+    for (let row = 0; row < grid.rows; row++) {
       const units = grid.getUnitsInCell(row, col);
       const enemies = units.filter(u => u.type === 'enemy' && u.isAlive());
       const players = units.filter(u => u.type === 'player' && u.isAlive());

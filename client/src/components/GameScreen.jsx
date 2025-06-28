@@ -208,10 +208,10 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   }, [gameState?.workerTypes, workers]);
 
   /* --------------------------
-   * Column selection state   
+   * Row selection state   
    * -------------------------- */
-  const cols = useMemo(() => {
-    if (Array.isArray(grid) && grid.length && Array.isArray(grid[0])) return grid[0].length;
+  const rows = useMemo(() => {
+    if (Array.isArray(grid) && grid.length) return grid.length;
     return 1;
   }, [grid]);
 
@@ -232,12 +232,12 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     setManualCol(true);
   };
 
-  // Keep selected column within bounds whenever grid changes
+  // Keep selected row within bounds whenever grid changes
   useEffect(() => {
-    setSelectedCol(prev => Math.min(prev, Math.max(0, cols - 1)));
-  }, [cols]);
+    setSelectedCol(prev => Math.min(prev, Math.max(0, rows - 1)));
+  }, [rows]);
 
-  // Keep spawn lane synced with player's default column unless the user has manually changed it.
+  // Keep spawn lane synced with player's default row unless the user has manually changed it.
   useEffect(() => {
     if (!manualCol) {
       _setSelectedCol(initialPlayerCol);
@@ -425,15 +425,15 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                   </div>
                 ))}
               </div>
-              {cols > 1 && (
+              {rows > 1 && (
                 <div className="form-control mb-3">
                   <label className="label justify-between">
-                    <span className="label-text text-xs sm:text-sm">Spawn Column</span>
+                    <span className="label-text text-xs sm:text-sm">Spawn Row</span>
                     <span className="label-text-alt text-xs">{selectedCol + 1}</span>
                   </label>
-                  {cols <= 8 ? (
+                  {rows <= 8 ? (
                     <div className="grid gap-1 pt-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
-                      {Array.from({ length: cols }).map((_, idx) => (
+                      {Array.from({ length: rows }).map((_, idx) => (
                         <button
                           key={idx}
                           className={`btn btn-xs sm:btn-sm ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
@@ -446,7 +446,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <input
                       type="range"
                       min="0"
-                      max={cols - 1}
+                      max={rows - 1}
                       step="1"
                       value={selectedCol}
                       onChange={(e) => setSelectedCol(Number(e.target.value))}

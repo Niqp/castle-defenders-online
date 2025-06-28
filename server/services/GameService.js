@@ -107,18 +107,18 @@ export class GameService {
   }
 
   /**
-   * Spawns a player unit in the selected lane (column).
+   * Spawns a player unit in the selected lane (row).
    * @param {Socket} socket
    * @param {string} type - Unit type key
-   * @param {number} selectedCol - The column (lane) to spawn the unit in
+   * @param {number} selectedRow - The row (lane) to spawn the unit in
    */
-  spawnUnit(socket, type, selectedCol = null) {
+  spawnUnit(socket, type, selectedRow = null) {
     const name = this.socketToName.get(socket.id);
     if (!this.gameState?.isPlayerAlive(name)) return;
 
-    // Default lane to the player's own column if not provided
-    const defaultCol = this.gameState?.playerToCol[name] ?? 0;
-    const colToUse = selectedCol !== null ? selectedCol : defaultCol;
+    // Default lane to the player's own row if not provided
+    const defaultRow = this.gameState?.playerToRow[name] ?? 0;
+    const rowToUse = selectedRow !== null ? selectedRow : defaultRow;
 
     const req = UNIT_TYPES[type];
     this._purchase(socket, req, 'units', type, (player) => {
@@ -126,7 +126,7 @@ export class GameService {
         maxHealth: req.hp,
         damage: req.dmg
       };
-      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, colToUse, player.name, type);
+      const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, rowToUse, player.name, type);
       this.gameState.addUnit(unit);
       this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {

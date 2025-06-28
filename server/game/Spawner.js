@@ -2,21 +2,21 @@
 import EnemyUnit from '../units/EnemyUnit.js';
 import PlayerUnit from '../units/PlayerUnit.js';
 
-// Spawns an enemy at a specified column (random if not provided) in the portal row.
-function spawnEnemyUnit(grid, enemyConfig, specifiedCol = null) {
-  const row = 0; // Portal row
-  const col = specifiedCol !== null ? specifiedCol : Math.floor(Math.random() * grid.columns);
+// Spawns an enemy at a specified row (random if not provided) in the portal column.
+function spawnEnemyUnit(grid, enemyConfig, specifiedRow = null) {
+  const col = grid.columns - 1; // Portal column
+  const row = specifiedRow !== null ? specifiedRow : Math.floor(Math.random() * grid.rows);
   const enemy = new EnemyUnit({ ...enemyConfig, row, col });
   enemy.justSpawned = true;
   grid.addUnitToCell(row, col, enemy);
   return enemy;
 }
 
-// Spawns a player unit at the selected column in the second row from the bottom
-function spawnPlayerUnit(grid, playerConfig, selectedCol, owner, unitType) {
-  const row = grid.rows - 1; // Castle row
-  const col = selectedCol;
-  if (col < 0 || col >= grid.columns) throw new Error('Invalid column for player spawn');
+// Spawns a player unit at the selected row in the castle column
+function spawnPlayerUnit(grid, playerConfig, selectedRow, owner, unitType) {
+  const col = 0; // Castle column
+  const row = selectedRow;
+  if (row < 0 || row >= grid.rows) throw new Error('Invalid row for player spawn');
   const playerUnit = new PlayerUnit({ ...playerConfig, row, col, owner, unitType });
   playerUnit.justSpawned = true;
   grid.addUnitToCell(row, col, playerUnit);

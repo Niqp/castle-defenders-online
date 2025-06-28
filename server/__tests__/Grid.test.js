@@ -1,31 +1,31 @@
-import Grid, { DEFAULT_ROWS, MIN_COLUMNS } from '../grid/Grid.js';
+import Grid, { DEFAULT_COLUMNS, MIN_ROWS } from '../grid/Grid.js';
 
 describe('Grid', () => {
-  it('initializes with correct default rows and minimum columns', () => {
-    const grid = new Grid(2); // less than MIN_COLUMNS
-    expect(grid.rows).toBe(DEFAULT_ROWS);
-    expect(grid.columns).toBe(MIN_COLUMNS);
-    expect(grid.cells.length).toBe(DEFAULT_ROWS);
-    expect(grid.cells[0].length).toBe(MIN_COLUMNS);
+  it('initializes with correct default columns and minimum rows', () => {
+    const grid = new Grid(2); // less than MIN_ROWS
+    expect(grid.columns).toBe(DEFAULT_COLUMNS);
+    expect(grid.rows).toBe(MIN_ROWS);
+    expect(grid.cells.length).toBe(MIN_ROWS);
+    expect(grid.cells[0].length).toBe(DEFAULT_COLUMNS);
   });
 
-  it('scales columns with player count', () => {
+  it('scales rows with player count when above minimum', () => {
     const grid = new Grid(5);
-    expect(grid.columns).toBe(5);
-    grid.setPlayerCount(7);
-    expect(grid.columns).toBe(7);
-    grid.setPlayerCount(3);
-    expect(grid.columns).toBe(3);
+    expect(grid.rows).toBe(MIN_ROWS); // 5 < MIN_ROWS, so MIN_ROWS is used
+    grid.setPlayerCount(10); // 10 > MIN_ROWS
+    expect(grid.rows).toBe(10);
+    grid.setPlayerCount(3); // 3 < MIN_ROWS, so MIN_ROWS is used
+    expect(grid.rows).toBe(MIN_ROWS);
   });
 
-  it('marks top row as portal and bottom row as castle', () => {
+  it('marks leftmost column as castle and rightmost column as portal', () => {
     const grid = new Grid(3);
-    for (let col = 0; col < grid.columns; col++) {
-      expect(grid.getCell(0, col)).toEqual({ type: 'portal' });
-      expect(grid.getCell(grid.rows - 1, col)).toEqual({ type: 'castle' });
+    for (let row = 0; row < grid.rows; row++) {
+      expect(grid.getCell(row, 0)).toEqual({ type: 'castle' });
+      expect(grid.getCell(row, grid.columns - 1)).toEqual({ type: 'portal' });
     }
-    expect(grid.isPortalCell(0)).toBe(true);
-    expect(grid.isCastleCell(grid.rows - 1)).toBe(true);
+    expect(grid.isCastleCell(0)).toBe(true);
+    expect(grid.isPortalCell(grid.columns - 1)).toBe(true);
   });
 
   it('adds and removes units in cells', () => {

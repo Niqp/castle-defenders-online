@@ -20,12 +20,12 @@ export class CombatTicker {
           ─── Phase 1 ───  (t = 0)
           Handle movement and assign battles.  Units visually start their "combat bounce" now.
         */
-        Movement.moveEnemyUnits(this.gameState.grid, (enemy, col) => {
-          // Enemy reached castle: apply damage to the owner of this column and remove unit
-          this.gameState.applyCastleDamage(col, enemy.damage || 10);
+        Movement.moveEnemyUnits(this.gameState.grid, (enemy, row) => {
+          // Enemy reached castle: apply damage to the owner of this row and remove unit
+          this.gameState.applyCastleDamage(row, enemy.damage || 10);
           this.gameState.removeUnit(enemy);
         });
-        Movement.movePlayerUnits(this.gameState.grid, (playerUnit, col) => {
+        Movement.movePlayerUnits(this.gameState.grid, (playerUnit, row) => {
           // Player reached portal: just remove unit
           this.gameState.removeUnit(playerUnit);
         });

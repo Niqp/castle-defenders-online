@@ -1,42 +1,49 @@
 // Grid.js
 // Manages the game grid for castle defenders
 
-const DEFAULT_ROWS = 12; // Can be changed later
-const MIN_COLUMNS = 7; // Scales up with player count
+const DEFAULT_COLUMNS = 12; // Distance from castle to portal
+const MIN_ROWS = 7; // Minimum lanes (scales up with player count)
 
 class Grid {
-  constructor(playerCount = 1, rows = DEFAULT_ROWS) {
-    this.rows = rows;
-    this.columns = Math.max(MIN_COLUMNS, playerCount);
+  constructor(playerCount = 1, columns = DEFAULT_COLUMNS) {
+    this.columns = columns;
+    this.rows = Math.max(MIN_ROWS, playerCount);
     // Initialize grid as 2D array: [row][col]
     this.cells = Array.from({ length: this.rows }, (_, rowIdx) => {
-      // Top row: Enemy Portal
-      if (rowIdx === 0) return Array(this.columns).fill({ type: 'portal' });
-      // Bottom row: Castle
-      if (rowIdx === this.rows - 1) return Array(this.columns).fill({ type: 'castle' });
-      // Other rows: empty
+      // First column: Castle
+      // Last column: Enemy Portal
       return Array(this.columns).fill(null);
     });
+    
+    // Set castle cells (leftmost column)
+    for (let row = 0; row < this.rows; row++) {
+      this.cells[row][0] = { type: 'castle' };
+    }
+    
+    // Set portal cells (rightmost column) 
+    for (let row = 0; row < this.rows; row++) {
+      this.cells[row][this.columns - 1] = { type: 'portal' };
+    }
   }
 
-  // Returns true if the cell is in the portal row
-  isPortalCell(row) {
-    return row === 0;
+  // Returns true if the cell is in the castle column
+  isCastleCell(col) {
+    return col === 0;
   }
 
-  // Returns true if the cell is in the castle row
-  isCastleCell(row) {
-    return row === this.rows - 1;
+  // Returns true if the cell is in the portal column
+  isPortalCell(col) {
+    return col === this.columns - 1;
   }
 
-  // Get all columns in the portal row
-  getPortalCells() {
-    return this.cells[0];
-  }
-
-  // Get all columns in the castle row
+  // Get all rows in the castle column
   getCastleCells() {
-    return this.cells[this.rows - 1];
+    return this.cells.map(row => row[0]);
+  }
+
+  // Get all rows in the portal column
+  getPortalCells() {
+    return this.cells.map(row => row[this.columns - 1]);
   }
 
   // Get contents of a cell
@@ -100,24 +107,27 @@ class Grid {
     return true;
   }
 
-  // Utility to scale columns if player count increases
+  // Utility to scale rows if player count increases
   setPlayerCount(playerCount) {
-    const newColumns = Math.max(MIN_COLUMNS, playerCount);
-    if (newColumns !== this.columns) {
-      // Resize columns for each row
-      for (let row = 0; row < this.rows; row++) {
-        if (newColumns > this.columns) {
-          // Add new columns
-          this.cells[row].push(...Array(newColumns - this.columns).fill(null));
-        } else {
-          // Remove extra columns
-          this.cells[row].length = newColumns;
+    const newRows = Math.max(MIN_ROWS, playerCount);
+    if (newRows !== this.rows) {
+      if (newRows > this.rows) {
+        // Add new rows
+        for (let i = this.rows; i < newRows; i++) {
+          const newRow = Array(this.columns).fill(null);
+          // Set castle and portal cells for new row
+          newRow[0] = { type: 'castle' };
+          newRow[this.columns - 1] = { type: 'portal' };
+          this.cells.push(newRow);
         }
+      } else {
+        // Remove extra rows
+        this.cells.length = newRows;
       }
-      this.columns = newColumns;
+      this.rows = newRows;
     }
   }
 }
 
 export default Grid;
-export { DEFAULT_ROWS, MIN_COLUMNS };
+export { DEFAULT_COLUMNS, MIN_ROWS };
