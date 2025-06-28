@@ -224,21 +224,25 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     return 0;
   }, [gameState?.players, playerName]);
 
-  const [selectedCol, setSelectedCol] = useState(initialPlayerCol);
+  const [selectedCol, _setSelectedCol] = useState(initialPlayerCol);
+  const [manualCol, setManualCol] = useState(false);
+
+  const setSelectedCol = (val) => {
+    _setSelectedCol(val);
+    setManualCol(true);
+  };
 
   // Keep selected column within bounds whenever grid changes
   useEffect(() => {
     setSelectedCol(prev => Math.min(prev, Math.max(0, cols - 1)));
   }, [cols]);
 
-  // Update selectedCol if player lane changed (e.g., new game start)
+  // Keep spawn lane synced with player's default column unless the user has manually changed it.
   useEffect(() => {
-    setSelectedCol(prev => {
-      // If user has manually selected a lane (differs from prev and not equal to old default?), we respect their choice.
-      // Only auto-set when prev equals old initialPlayerCol (meaning untouched) to avoid overriding manual changes.
-      if (prev === initialPlayerCol) return initialPlayerCol;
-      return prev;
-    });
+    if (!manualCol) {
+      _setSelectedCol(initialPlayerCol);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPlayerCol]);
 
   /* -------------------------------------------------
@@ -466,13 +470,22 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               </div>
               <hr className="my-1 opacity-50" />
               <div className="space-y-1">
-                {Object.entries(castleHp).map(([name, hp]) => (
-                  <div key={name} className="flex justify-between items-center text-xs sm:text-sm">
-                    <span className={`truncate mr-1 ${name===playerName ? 'font-bold' : ''}`}>{name}</span>
-                    <progress className="progress progress-error flex-grow mx-1" value={hp} max={MAX_CASTLE_HP}></progress>
-                    <span className="ml-1">{hp}</span>
-                  </div>
-                ))}
+                {(() => {
+                  // Determine display order based on lane (players array order)
+                  const orderedNames = Array.isArray(gameState?.players)
+                    ? gameState.players.map(p => (typeof p === 'string' ? p : p.name))
+                    : Object.keys(castleHp);
+                  return orderedNames.map((name, idx) => {
+                    const hp = castleHp[name] ?? 0;
+                    return (
+                      <div key={name} className="flex justify-between items-center text-xs sm:text-sm">
+                        <span className={`${name===playerName ? 'font-bold' : ''} mr-1 whitespace-nowrap`}>{idx + 1}. {name}</span>
+                        <progress className="progress progress-error flex-grow mx-1" value={hp} max={MAX_CASTLE_HP}></progress>
+                        <span className="ml-1">{hp}</span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
