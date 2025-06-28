@@ -166,7 +166,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
     // Render static children once. Positions will be mutated imperatively.
     const meta = metaRef.current.get(unitId);
     const spriteKey = meta?.spriteKey ?? (meta?.type === 'enemy' ? 'goblin' : 'swordsman');
-    const texture = textures[spriteKey];
+    const texture = textures?.[spriteKey];
     const baseSize = (texture?.width ?? 64);
     const spriteScale = (UNIT_RADIUS * 2) / baseSize;
 
@@ -519,6 +519,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   };
 
   const [textures, setTextures] = useState(null);
+  const texturesRef = useRef(null);
 
   // Load textures once on mount
   useEffect(() => {
@@ -530,9 +531,21 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       for (const [key, url] of Object.entries(SPRITE_URLS)) {
         map[key] = Assets.get(url);
       }
+      texturesRef.current = map;
       setTextures(map);
     })();
-    return () => { cancelled = true; };
+    return () => { 
+      cancelled = true;
+      // Fix #2: Destroy textures to prevent WebGL memory leak
+      if (texturesRef.current) {
+        Object.values(texturesRef.current).forEach(texture => {
+          if (texture && typeof texture.destroy === 'function') {
+            texture.destroy(true); // destroyBase = true to free GPU memory
+          }
+        });
+        texturesRef.current = null;
+      }
+    };
   }, []);
 
   if (!textures) {

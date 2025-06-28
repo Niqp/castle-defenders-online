@@ -111,7 +111,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       socket.off('spawnEnemies');
       socket.off('spawnUnits');
     };
-  }, [socketRef, enemies]); // Added enemies to ref for prevEnemiesRef.current logic
+  }, [socketRef]); // Fix #4: Only depend on socketRef to prevent listener churn
 
   function handleHireWorker(type) {
     socketRef.current?.emit('hireWorker', type);
