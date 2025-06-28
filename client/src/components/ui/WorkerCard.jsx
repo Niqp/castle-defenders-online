@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, createContext, useContext } from 'react';
 
 // Import sprites
 import castleImg from '../../sprites/buildings/castle.png';
@@ -17,6 +17,158 @@ const RESOURCE_SPRITES = {
   food: foodImg
 };
 
+/****************************************************************
+ * ============================================================ *
+ *  PERFORMANCE PATCH – shared animation context               *
+ * ------------------------------------------------------------ *
+ *  Replace individual RAF loops with a single shared ticker   *
+ *  that updates all visible WorkerCards. Add intersection     *
+ *  observer to pause off-screen animations.                   *
+ * ============================================================ *
+ ****************************************************************/
+
+// Module-level sprite cache to prevent duplicate Image objects
+const SPRITE_CACHE = new Map();
+const getCachedImage = (src) => {
+  if (!SPRITE_CACHE.has(src)) {
+    const img = new Image();
+    img.src = src;
+    SPRITE_CACHE.set(src, img);
+  }
+  return SPRITE_CACHE.get(src);
+};
+
+// Shared animation context
+const WorkerAnimationContext = createContext();
+
+export const WorkerAnimationProvider = ({ children }) => {
+  const cardsRef = useRef(new Map()); // cardId -> { canvas, workers, isVisible, ... }
+  const rafIdRef = useRef(null);
+  
+  const registerCard = (cardId, cardData) => {
+    cardsRef.current.set(cardId, { ...cardData, isVisible: true });
+    
+    // Start animation loop if not already running
+    if (!rafIdRef.current) {
+      startAnimation();
+    }
+  };
+  
+  const unregisterCard = (cardId) => {
+    cardsRef.current.delete(cardId);
+    
+    // Stop animation if no cards remain
+    if (cardsRef.current.size === 0 && rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  };
+  
+  const updateCardVisibility = (cardId, isVisible) => {
+    const card = cardsRef.current.get(cardId);
+    if (card) {
+      card.isVisible = isVisible;
+    }
+  };
+  
+  const updateCardWorkers = (cardId, workers) => {
+    const card = cardsRef.current.get(cardId);
+    if (card) {
+      card.workers = workers;
+    }
+  };
+  
+  const updateCardData = (cardId, newData) => {
+    const card = cardsRef.current.get(cardId);
+    if (card) {
+      Object.assign(card, newData);
+    }
+  };
+  
+  const startAnimation = () => {
+    const DURATION = 3000; // ms for full round trip
+    
+    const animate = (now) => {
+      
+      // Update all visible cards
+      for (const [cardId, cardData] of cardsRef.current.entries()) {
+        if (!cardData.isVisible || !cardData.canvas) continue;
+        
+        const { canvas, workers, canvasSize, images } = cardData;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
+        
+        // Compute path endpoints
+        const SPRITE_SIZE = 32;
+        const WORKER_SIZE = 16;
+        const RESOURCE_SIZE = 12;
+        const HALF_SPRITE = SPRITE_SIZE / 2;
+        const HALF_WORKER = WORKER_SIZE / 2;
+        
+        const castleX = HALF_SPRITE + 8;
+        const castleY = canvasSize.h / 2;
+        const buildX = canvasSize.w - (HALF_SPRITE + 8);
+        const buildY = castleY;
+        
+        // Draw static sprites (always show them)
+        if (images.castle && images.castle.complete) {
+          ctx.drawImage(images.castle, castleX - HALF_SPRITE, castleY - HALF_SPRITE, SPRITE_SIZE, SPRITE_SIZE);
+        }
+        if (images.building && images.building.complete) {
+          ctx.drawImage(images.building, buildX - HALF_SPRITE, buildY - HALF_SPRITE, SPRITE_SIZE, SPRITE_SIZE);
+        }
+        
+        // Animate workers (only if there are any)
+        if (!workers || workers.length === 0) continue;
+        
+        workers.forEach((w, idx) => {
+          // Use current time with worker's initial offset for smooth animation
+          const elapsed = (now - w.startTime) % DURATION;
+          const t = elapsed / DURATION;
+          const forward = t < 0.5;
+          const prog = forward ? t * 2 : (t - 0.5) * 2;
+          const x = forward
+            ? castleX + (buildX - castleX) * prog
+            : buildX - (buildX - castleX) * prog;
+          const y = castleY + ((idx % 3) - 1) * 6;
+          
+          if (images.worker && images.worker.complete) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(forward ? 1 : -1, 1);
+            ctx.drawImage(images.worker, -HALF_WORKER, -HALF_WORKER, WORKER_SIZE, WORKER_SIZE);
+            ctx.restore();
+          }
+          
+          // Draw resource when coming back
+          if (!forward && images.resource && images.resource.complete) {
+            ctx.drawImage(images.resource, x + HALF_WORKER - 2, y - HALF_WORKER - 6, RESOURCE_SIZE, RESOURCE_SIZE);
+          }
+        });
+      }
+      
+      rafIdRef.current = requestAnimationFrame(animate);
+    };
+    
+    rafIdRef.current = requestAnimationFrame(animate);
+  };
+  
+  return (
+    <WorkerAnimationContext.Provider value={{
+      registerCard,
+      unregisterCard,
+      updateCardVisibility,
+      updateCardWorkers,
+      updateCardData
+    }}>
+      {children}
+    </WorkerAnimationContext.Provider>
+  );
+};
+
 export default function WorkerCard({ 
   worker, 
   workerSprite, 
@@ -25,64 +177,59 @@ export default function WorkerCard({
   disabled,
   workerConfig 
 }) {
+  const animationContext = useContext(WorkerAnimationContext);
+  
   /* --------------------------
-   * Sprite asset caching
+   * Cached sprite assets
    * -------------------------- */
-  const workerImage = useMemo(() => {
-    const img = new Image();
-    img.src = workerSprite;
-    return img;
-  }, [workerSprite]);
-  const castleImage = useMemo(() => {
-    const img = new Image();
-    img.src = castleImg;
-    return img;
-  }, []);
-  const buildingKey = useMemo(() => {
-    const outputs = workerConfig?.outputs || { gold: 1 };
-    return outputs.food ? 'food' : 'gold';
-  }, [workerConfig]);
-  const buildingImage = useMemo(() => {
-    const img = new Image();
-    img.src = BUILDING_SPRITES[buildingKey];
-    return img;
-  }, [buildingKey]);
-  const resourceImage = useMemo(() => {
-    const img = new Image();
-    img.src = RESOURCE_SPRITES[buildingKey];
-    return img;
-  }, [buildingKey]);
+  const images = useMemo(() => ({
+    worker: getCachedImage(workerSprite),
+    castle: getCachedImage(castleImg),
+    building: getCachedImage(BUILDING_SPRITES[workerConfig?.outputs?.food ? 'food' : 'gold']),
+    resource: getCachedImage(RESOURCE_SPRITES[workerConfig?.outputs?.food ? 'food' : 'gold'])
+  }), [workerSprite, workerConfig]);
 
   /* --------------------------
-   * Layout refs & state & sizing constants
+   * Layout refs & state
    * -------------------------- */
-  const SPRITE_SIZE = 32;            // Castle / Building sprite size
-  const WORKER_SIZE = 16;            // Animated worker sprite
-  const RESOURCE_SIZE = 12;          // Carried resource sprite
-  const HALF_SPRITE = SPRITE_SIZE / 2;
-  const HALF_WORKER = WORKER_SIZE / 2;
-
   const cardRef = useRef(null);
   const canvasRef = useRef(null);
   const [canvasSize, setCanvasSize] = useState({ w: 1, h: 1 });
-
-  // Dynamic worker cap (3 for strong devices, else 2)
+  const cardIdRef = useRef(`worker-${worker.type}-${Math.random()}`);
+  
+  // Dynamic worker cap
   const MAX_WORKERS = useMemo(
     () => (navigator.hardwareConcurrency >= 4 ? 50 : 25),
     []
   );
 
   // Worker simulation objects
-  const workersRef = useRef([]); // {offset}
+  const workersRef = useRef([]);
 
   /* --------------------------
-   * Resize observer -> rescale canvas
+   * Intersection Observer for visibility
+   * -------------------------- */
+  useEffect(() => {
+    if (!cardRef.current || !animationContext) return;
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        animationContext.updateCardVisibility(cardIdRef.current, entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+    
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [animationContext]);
+
+  /* --------------------------
+   * Resize observer
    * -------------------------- */
   useEffect(() => {
     const updateSize = () => {
       if (!cardRef.current) return;
       const rect = cardRef.current.getBoundingClientRect();
-      // Reserve 32px for new taller bottom bar
       setCanvasSize({ w: rect.width, h: rect.height - 32 });
     };
 
@@ -98,70 +245,45 @@ export default function WorkerCard({
   useEffect(() => {
     const target = Math.min(worker.current, MAX_WORKERS);
     const arr = workersRef.current;
-    while (arr.length < target) arr.push({ offset: Math.random() * 3000 });
+    while (arr.length < target) arr.push({ startTime: performance.now() });
     while (arr.length > target) arr.pop();
-  }, [worker.current, MAX_WORKERS]);
+    
+    // Update animation context
+    if (animationContext) {
+      animationContext.updateCardWorkers(cardIdRef.current, arr);
+    }
+  }, [worker.current, MAX_WORKERS, animationContext]);
 
   /* --------------------------
-   * Animation loop
+   * Register/unregister with animation context
    * -------------------------- */
   useEffect(() => {
-    let running = true;
-    let last = performance.now();
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
-
-    const DURATION = 3000; // ms for full round trip
-    const speed = 1 / DURATION;
-
-    const draw = (now) => {
-      if (!running) return;
-      const dt = now - last;
-      last = now;
-
-      // Clear
-      ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
-
-      // Compute path endpoints (sprite centres)
-      const castleX = HALF_SPRITE + 8; // margin 8px
-      const castleY = canvasSize.h / 2;
-      const buildX = canvasSize.w - (HALF_SPRITE + 8);
-      const buildY = castleY;
-
-      // Draw static sprites
-      ctx.drawImage(castleImage, castleX - HALF_SPRITE, castleY - HALF_SPRITE, SPRITE_SIZE, SPRITE_SIZE);
-      ctx.drawImage(buildingImage, buildX - HALF_SPRITE, buildY - HALF_SPRITE, SPRITE_SIZE, SPRITE_SIZE);
-
-      // Walk each visible worker
-      workersRef.current.forEach((w, idx) => {
-        w.offset = (w.offset + dt) % DURATION;
-        const t = w.offset / DURATION; // 0→1
-        const forward = t < 0.5;
-        const prog = forward ? t * 2 : (t - 0.5) * 2; // 0→1 both ways
-        const x = forward
-          ? castleX + (buildX - castleX) * prog
-          : buildX - (buildX - castleX) * prog;
-        const y = castleY + ((idx % 3) - 1) * 6; // slightly larger lane offset
-
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.scale(forward ? 1 : -1, 1);
-        ctx.drawImage(workerImage, -HALF_WORKER, -HALF_WORKER, WORKER_SIZE, WORKER_SIZE);
-        ctx.restore();
-
-        // Draw resource when coming back
-        if (!forward) {
-          ctx.drawImage(resourceImage, x + HALF_WORKER - 2, y - HALF_WORKER - 6, RESOURCE_SIZE, RESOURCE_SIZE);
-        }
-      });
-
-      requestAnimationFrame(draw);
-    };
-    requestAnimationFrame(draw);
+    if (!animationContext || !canvasRef.current) return;
+    
+    animationContext.registerCard(cardIdRef.current, {
+      canvas: canvasRef.current,
+      workers: workersRef.current,
+      canvasSize,
+      images
+    });
+    
     return () => {
-      running = false;
+      animationContext.unregisterCard(cardIdRef.current);
     };
-  }, [canvasSize, workerImage, buildingImage, castleImage, resourceImage]);
+  }, [animationContext, canvasSize, images]);
+
+  /* --------------------------
+   * Force initial render when images load
+   * -------------------------- */
+  useEffect(() => {
+    if (!animationContext) return;
+    
+    // Update context data when images change/load
+    animationContext.updateCardData?.(cardIdRef.current, {
+      images,
+      canvasSize
+    });
+  }, [images.castle, images.building, images.worker, images.resource, animationContext, canvasSize]);
 
   /* --------------------------
    * Click-to-hire helpers

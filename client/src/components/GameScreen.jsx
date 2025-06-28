@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import PixiStage from './PixiStage';
 import Loading from './Loading.jsx';
-import WorkerCard from './ui/WorkerCard';
+import WorkerCard, { WorkerAnimationProvider } from './ui/WorkerCard';
 import swordsmanImg from '../sprites/units/swordsman.png';
 import archerImg from '../sprites/units/archer.png';
 import knightImg from '../sprites/units/knight.png';
@@ -420,24 +420,26 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
           </div>
 
           {/* Workers Section */}
-          <div className="card bg-base-300 shadow-md compact">
-            <div className="card-body p-3 sm:p-4">
-              <h3 className="card-title text-md sm:text-lg">Workers</h3>
-              <div className="space-y-4 mt-3">
-                {workerTypes.map(worker => (
-                  <WorkerCard
-                    key={worker.type}
-                    worker={worker}
-                    workerSprite={SPRITE_MAP[worker.sprite]}
-                    workerConfig={gameState?.workerTypes?.[worker.type]}
-                    onHire={() => handleHireWorker(worker.type)}
-                    canAfford={canAfford(worker.cost)}
-                    disabled={!playerAlive}
-                  />
-                ))}
+          <WorkerAnimationProvider>
+            <div className="card bg-base-300 shadow-md compact">
+              <div className="card-body p-3 sm:p-4">
+                <h3 className="card-title text-md sm:text-lg">Workers</h3>
+                <div className="space-y-4 mt-3">
+                  {workerTypes.map(worker => (
+                    <WorkerCard
+                      key={worker.type}
+                      worker={worker}
+                      workerSprite={SPRITE_MAP[worker.sprite]}
+                      workerConfig={gameState?.workerTypes?.[worker.type]}
+                      onHire={() => handleHireWorker(worker.type)}
+                      canAfford={canAfford(worker.cost)}
+                      disabled={!playerAlive}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          </WorkerAnimationProvider>
 
           {/* Military Units Section */}
           <div className="card bg-base-300 shadow-md compact">

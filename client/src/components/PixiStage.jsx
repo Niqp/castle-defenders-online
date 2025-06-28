@@ -198,6 +198,9 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       const now = Date.now();
 
       const target = targetPosRef.current.get(unitId);
+      // Safety check: if target position doesn't exist, skip this frame
+      if (!target) return;
+      
       const prev = prevPosRef.current.get(unitId) || target;
       const lastMove = moveTimeRef.current.get(unitId) || now;
       const localT = Math.min(1, (now - lastMove) / ANIM_MS);
