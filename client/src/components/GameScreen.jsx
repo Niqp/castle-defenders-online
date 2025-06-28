@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import PixiStage from './PixiStage';
 import Loading from './Loading.jsx';
+import WorkerCard from './ui/WorkerCard';
 import swordsmanImg from '../sprites/units/swordsman.png';
 import archerImg from '../sprites/units/archer.png';
 import knightImg from '../sprites/units/knight.png';
@@ -416,21 +417,17 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
           <div className="card bg-base-300 shadow-md compact">
             <div className="card-body p-3 sm:p-4">
               <h3 className="card-title text-md sm:text-lg">Workers</h3>
-              <div className="space-y-2 mt-2">
+              <div className="space-y-4 mt-3">
                 {workerTypes.map(worker => (
-                  <div key={worker.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
-                    <div>
-                      <p className="font-semibold text-sm sm:text-base flex items-center">{SPRITE_MAP[worker.sprite] && <img src={SPRITE_MAP[worker.sprite]} alt={worker.type} className="w-5 h-5 mr-1" />} {worker.type} <span className="badge badge-neutral badge-sm ml-1">x{worker.current}</span></p>
-                      <p className="text-xs text-base-content/70">Cost: {Object.entries(worker.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}</p>
-                    </div>
-                    <button 
-                      className="btn btn-secondary btn-sm" 
-                      onClick={() => handleHireWorker(worker.type)}
-                      disabled={!playerAlive || !canAfford(worker.cost)}
-                    >
-                      Hire
-                    </button>
-                  </div>
+                  <WorkerCard
+                    key={worker.type}
+                    worker={worker}
+                    workerSprite={SPRITE_MAP[worker.sprite]}
+                    workerConfig={gameState?.workerTypes?.[worker.type]}
+                    onHire={() => handleHireWorker(worker.type)}
+                    canAfford={canAfford(worker.cost)}
+                    disabled={!playerAlive}
+                  />
                 ))}
               </div>
             </div>

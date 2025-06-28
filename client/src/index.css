@@ -37,3 +37,65 @@
 canvas {
   touch-action: pan-x !important;
 }
+
+/*----------------------------------------------
+  Worker Card Animations
+  Smooth animations for worker sprites
+----------------------------------------------*/
+.worker-card {
+  transition: all 0.3s ease;
+  backdrop-filter: blur(1px);
+}
+
+.worker-card:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  border-color: hsl(var(--pc));
+}
+
+.worker-card.cursor-pointer:hover {
+  border-color: hsl(var(--ac));
+}
+
+.worker-sprite {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.5));
+  will-change: transform;
+}
+
+/* Optimize worker animation containers */
+.worker-card .absolute[style*="animation"] {
+  will-change: left, top, transform;
+  transform: translateZ(0); /* Force hardware acceleration */
+}
+
+/* Better visual separation */
+.worker-card + .worker-card {
+  margin-top: 1.25rem;
+}
+
+.worker-card {
+  margin-bottom: 0.5rem;
+}
+
+/* Building sprites styling */
+.worker-card img[alt="Castle"],
+.worker-card img[alt*="building"] {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* Optimize animations for mobile */
+@media (prefers-reduced-motion: reduce) {
+  .worker-card {
+    transition: none;
+  }
+  
+  .worker-card:hover {
+    transform: none;
+  }
+}
