@@ -10,6 +10,7 @@ yarn-error.log*
 
 # Build output
 /dist/
+/client/dist/
 /build/
 
 # Dependency directories
