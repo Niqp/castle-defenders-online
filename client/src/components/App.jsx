@@ -22,8 +22,15 @@ export default function App() {
     const STORAGE_KEY = 'clientId';
     let cid = localStorage.getItem(STORAGE_KEY);
     if (!cid) {
-      // Generate a UUID using the browser's crypto API
-      cid = crypto.randomUUID();
+      // Generate a UUID. Use crypto.randomUUID when available, otherwise fall back
+      // to a simple polyfill (RFC4122 version-4 compliant enough for client IDs).
+      const fallbackUuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+
+      cid = (crypto.randomUUID ? crypto.randomUUID() : fallbackUuid());
       localStorage.setItem(STORAGE_KEY, cid);
     }
 
@@ -122,7 +129,7 @@ export default function App() {
 
   // This div can be styled to provide the common background
   return (
-    <div className="app-container w-full h-screen bg-base-300 text-white flex flex-col items-center justify-center">
+    <div className="app-container w-full h-dvh bg-base-300 text-white flex flex-col items-center justify-center">
       {/* You can add a common header or background elements here if they are outside the routed content */}
       {/* For example: <img src="/path/to/background.jpg" className="absolute top-0 left-0 w-full h-full object-cover -z-10" /> */}
       <Routes>

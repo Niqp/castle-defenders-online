@@ -333,7 +333,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   }, [workers, gameState?.workerTypes]);
 
   return (
-    <div data-theme="fantasy" className="min-h-screen w-full flex flex-col bg-base-300 text-base-content relative">
+    <div data-theme="fantasy" className="min-h-dvh w-full flex flex-col bg-base-300 text-base-content relative">
       {/* Header Navbar - Redesigned for consistency and responsiveness */}
       <header className="bg-base-200 border-b border-base-300 shadow-lg sticky top-0 z-50">
         <div className="container mx-auto px-4 py-3">
