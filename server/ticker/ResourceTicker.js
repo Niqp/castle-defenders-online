@@ -6,19 +6,32 @@ export class ResourceTicker {
     try {
       this.players.forEach(p => {
         const incomeMap = {};
+        
+        // Calculate worker income with productivity upgrades
         for (const [type, config] of Object.entries(WORKER_TYPES)) {
-          const count = (p.workers && p.workers[type]) ? p.workers[type] : 0;
+          const count = p.workers[type] || 0;
           if (!count) continue;
-          // Support both new `outputs` object and legacy `output` + `resource` fields for backward compatibility
           const outputs = config.outputs || (config.output !== undefined ? { [config.resource || 'gold']: config.output } : {});
+          
+          // Apply worker productivity upgrade
+          const productivityLevel = p.upgrades?.WORKER_PRODUCTIVITY || 0;
+          const productivityMultiplier = this._getUpgradeEffect(UPGRADE_TYPES.WORKER_PRODUCTIVITY, productivityLevel, 'workerMultiplier', 1);
+          
+          // Apply cooperative bonus (10% per additional player)
+          const playerCount = this.players.length;
+          const coopBonus = 1 + ((playerCount - 1) * 0.1);
+          
           for (const [res, amount] of Object.entries(outputs)) {
-            incomeMap[res] = (incomeMap[res] || 0) + count * amount;
+            const baseAmount = amount * productivityMultiplier * coopBonus;
+            incomeMap[res] = (incomeMap[res] || 0) + count * baseAmount;
           }
         }
-        // Apply incomes to player
-        for (const [res, amount] of Object.entries(incomeMap)) {
-          p[res] = (p[res] || 0) + amount;
+        
+        // Apply income to player
+        for (const [res, amt] of Object.entries(incomeMap)) {
+          p[res] = (p[res] || 0) + amt;
         }
+        
         // Prepare all players' resources for broadcasting
         const allPlayersResources = {};
         this.players.forEach(player => {
@@ -73,8 +86,8 @@ export class ResourceTicker {
             const coopBonus = 1 + ((playerCount - 1) * 0.1);
             
             for (const [res, amount] of Object.entries(outputs)) {
-              const finalAmount = Math.floor(amount * productivityMultiplier * coopBonus);
-              incomeMap[res] = (incomeMap[res] || 0) + count * finalAmount;
+              const baseAmount = amount * productivityMultiplier * coopBonus;
+              incomeMap[res] = (incomeMap[res] || 0) + count * baseAmount;
             }
           }
           

@@ -56,7 +56,39 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const [castleHp, setCastleHp] = useState(
     typeof gameState?.castleHp === 'object' ? gameState.castleHp : { [playerName]: gameState?.castleHp ?? 1000 }
   );
-  const MAX_CASTLE_HP = 1000; // TODO: optionally fetch from server
+  // Calculate actual maximum castle HP based on upgrades
+  const calculateMaxCastleHp = (upgrades, upgradeTypes) => {
+    // Base castle HP (400) plus any multiplayer bonuses (server handles these)
+    // We start with a conservative estimate since server handles initial bonuses
+    let maxHp = 400;
+    
+    // Add castle fortification upgrades
+    if (upgrades && upgradeTypes && upgradeTypes.CASTLE_FORTIFICATION) {
+      const fortificationLevel = upgrades.CASTLE_FORTIFICATION || 0;
+      if (fortificationLevel > 0) {
+        // Calculate total HP increase from all upgrade levels
+        let totalHpIncrease = 0;
+        for (let level = 1; level <= fortificationLevel; level++) {
+          const levelData = upgradeTypes.CASTLE_FORTIFICATION.levels?.find(l => l.level === level);
+          if (levelData && levelData.effect.castleMaxHpIncrease) {
+            totalHpIncrease += levelData.effect.castleMaxHpIncrease;
+          }
+        }
+        maxHp += totalHpIncrease;
+      }
+    }
+    
+    return maxHp;
+  };
+
+  const MAX_CASTLE_HP = useMemo(() => {
+    return calculateMaxCastleHp(upgrades, gameState?.upgradeTypes);
+  }, [upgrades, gameState?.upgradeTypes]);
+
+  // Helper function to calculate max castle HP for any player
+  const calculateMaxCastleHpForPlayer = (playerUpgrades) => {
+    return calculateMaxCastleHp(playerUpgrades, gameState?.upgradeTypes);
+  };
 
   // Derived flag: is this local player still alive?
   const playerAlive = (castleHp[playerName] ?? 0) > 0;
@@ -926,12 +958,18 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                           ? calculateResourcePerTick(playerResources.workers, gameState?.workerTypes)
                           : { gold: 0, food: 0 };
                         
+                        // Calculate this player's maximum castle HP based on their upgrades
+                        const playerUpgrades = name === playerName 
+                          ? upgrades 
+                          : gameState?.players?.find(p => p.name === name)?.upgrades || {};
+                        const playerMaxCastleHp = calculateMaxCastleHpForPlayer(playerUpgrades);
+                        
                         return (
                           <div key={name} className="bg-base-200 p-2 rounded">
                             <div className="flex justify-between items-center text-xs sm:text-sm mb-1">
                               <span className={`${name===playerName ? 'font-bold' : ''} mr-1 whitespace-nowrap`}>{idx + 1}. {name}</span>
-                              <progress className="progress progress-error flex-grow mx-1" value={hp} max={MAX_CASTLE_HP}></progress>
-                              <span className="ml-1">{hp}</span>
+                              <progress className="progress progress-error flex-grow mx-1" value={hp} max={playerMaxCastleHp}></progress>
+                              <span className="ml-1">{hp}/{playerMaxCastleHp}</span>
                             </div>
                             {playerResources && (
                               <div className="flex justify-between text-xs text-base-content/70">

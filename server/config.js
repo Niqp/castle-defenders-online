@@ -38,15 +38,15 @@ export const GAME_BALANCE = {
 };
 
 export const WORKER_TYPES = {
-  // Gold generation - slower early game
-  Miner:    { costs: { gold: 40 },   outputs: { gold: 1.5 },  sprite: 'miner.png' },
-  Digger:   { costs: { gold: 120 },  outputs: { gold: 3 },    sprite: 'digger.png' },
-  Excavator:{ costs: { gold: 400 },  outputs: { gold: 8 },    sprite: 'excavator.png' },
+  // Gold generation - increasing efficiency with higher tiers
+  Miner:    { costs: { gold: 35 },   outputs: { gold: 1.6 },   sprite: 'miner.png' },
+  Digger:   { costs: { gold: 100 },  outputs: { gold: 4.8 },   sprite: 'digger.png' },
+  Excavator:{ costs: { gold: 320 },  outputs: { gold: 16.0 },  sprite: 'excavator.png' },
   
-  // Food generation - more expensive
-  Farmer:   { costs: { gold: 35 },   outputs: { food: 1.5 },  sprite: 'farmer.png' },
-  Hunter:   { costs: { gold: 100 },  outputs: { food: 3 },    sprite: 'hunter.png' },
-  Rancher:  { costs: { gold: 350 },  outputs: { food: 8 },    sprite: 'rancher.png' },
+  // Food generation - increasing efficiency with higher tiers
+  Farmer:   { costs: { gold: 35 },   outputs: { food: 1.5 },   sprite: 'farmer.png' },
+  Hunter:   { costs: { gold: 100 },  outputs: { food: 4.5 },   sprite: 'hunter.png' },
+  Rancher:  { costs: { gold: 320 },  outputs: { food: 15.0 },  sprite: 'rancher.png' },
 };
 
 export const UNIT_TYPES = {
@@ -54,7 +54,7 @@ export const UNIT_TYPES = {
   Swordsman: { costs: { gold: 25, food: 8 }, hp: 50, dmg: 6, range: 35, speed: 3, sprite: 'swordsman.png' },
   
   // Mid game unit - clear range advantage
-  Archer: { costs: { gold: 40, food: 15 }, hp: 35, dmg: 8, range: 80, speed: 2.5, sprite: 'archer.png' },
+  Archer: { costs: { gold: 40, food: 15 }, hp: 35, dmg: 12, range: 80, speed: 2.5, sprite: 'archer.png' },
   
   // Late game unit - expensive powerhouse
   Knight: { costs: { gold: 100, food: 35 }, hp: 140, dmg: 18, range: 35, speed: 2, sprite: 'knight.png' },
