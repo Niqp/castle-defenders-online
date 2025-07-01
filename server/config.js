@@ -15,10 +15,10 @@ export const GRID_CONFIG = {
 
 // Wave spawning and enemy progression
 export const WAVE_CONFIG = {
-  BASE_ENEMIES_PER_WAVE: 3, // Increased to ensure early action in large games
-  ENEMIES_PER_PLAYER_SCALING: 0.22, // Slightly reduced to compensate for base increase
-  PLAYER_COUNT_SCALING_CURVE: 0.75, // Slightly steeper curve for more challenge
-  MAX_ENEMIES_PER_LANE: 8, // Cap on enemies per lane to prevent impossible scenarios
+  BASE_ENEMIES_PER_WAVE: 4, // Increased base threat
+  ENEMIES_PER_PLAYER_SCALING: 0.4, // Much higher scaling
+  PLAYER_COUNT_SCALING_CURVE: 1.1, // Slightly super-linear to make large games harder
+  MAX_ENEMIES_PER_LANE: 12, // Increased cap
   LANE_DISTRIBUTION_SMOOTHING: 0.3, // More randomness for variety
   MIN_ENEMIES_PER_ACTIVE_LANE: 1, // Ensure every player gets at least 1 enemy if possible
   LAST_SCALING_WAVE: 150, // Wave where enemy type progression completes
@@ -30,43 +30,50 @@ export const WAVE_CONFIG = {
 
 // Game balance parameters
 export const GAME_BALANCE = {
-  INITIAL_CASTLE_HP: 500, // Reduced from 1000 to 500 for more tension
-  STARTING_GOLD: 20, // Increased from 15 to 20 for better start
-  STARTING_FOOD: 10, // New: Start with 10 food to spawn first unit
-  COOP_BONUS_PER_PLAYER: 0.1, // 10% resource generation bonus per additional player
-  LARGE_GAME_CASTLE_HP_BONUS: 50, // Extra castle HP per player above 4
+  INITIAL_CASTLE_HP: 400, // Reduced for more tension
+  STARTING_GOLD: 10, // Significantly reduced
+  STARTING_FOOD: 5, // Reduced
+  COOP_BONUS_PER_PLAYER: 0.05, // Reduced from 0.1 to 0.05
+  LARGE_GAME_CASTLE_HP_BONUS: 30, // Reduced bonus
 };
 
 export const WORKER_TYPES = {
-  // Gold generation - better scaling
-  Miner:    { costs: { gold: 30 },   outputs: { gold: 2 },  sprite: 'miner.png' },
-  Digger:   { costs: { gold: 80 },   outputs: { gold: 4 },  sprite: 'digger.png' },
-  Excavator:{ costs: { gold: 300 },  outputs: { gold: 10 }, sprite: 'excavator.png' },
+  // Gold generation - slower early game
+  Miner:    { costs: { gold: 40 },   outputs: { gold: 1.5 },  sprite: 'miner.png' },
+  Digger:   { costs: { gold: 120 },  outputs: { gold: 3 },    sprite: 'digger.png' },
+  Excavator:{ costs: { gold: 400 },  outputs: { gold: 8 },    sprite: 'excavator.png' },
   
-  // Food generation - faster early progression
-  Farmer:   { costs: { gold: 25 },   outputs: { food: 2 },  sprite: 'farmer.png' },
-  Hunter:   { costs: { gold: 70 },   outputs: { food: 4 },  sprite: 'hunter.png' },
-  Rancher:  { costs: { gold: 250 },  outputs: { food: 10 }, sprite: 'rancher.png' },
+  // Food generation - more expensive
+  Farmer:   { costs: { gold: 35 },   outputs: { food: 1.5 },  sprite: 'farmer.png' },
+  Hunter:   { costs: { gold: 100 },  outputs: { food: 3 },    sprite: 'hunter.png' },
+  Rancher:  { costs: { gold: 350 },  outputs: { food: 8 },    sprite: 'rancher.png' },
 };
 
 export const UNIT_TYPES = {
-  // Early game unit - cheap but weak
-  Swordsman: { costs: { gold: 15, food: 5 }, hp: 40, dmg: 5, range: 35, speed: 3, sprite: 'swordsman.png' },
+  // Early game unit - more expensive but stronger
+  Swordsman: { costs: { gold: 25, food: 8 }, hp: 50, dmg: 6, range: 35, speed: 3, sprite: 'swordsman.png' },
   
-  // Mid game unit - better value proposition
-  Archer: { costs: { gold: 25, food: 8 }, hp: 30, dmg: 7, range: 80, speed: 2.5, sprite: 'archer.png' },
+  // Mid game unit - clear range advantage
+  Archer: { costs: { gold: 40, food: 15 }, hp: 35, dmg: 8, range: 80, speed: 2.5, sprite: 'archer.png' },
   
-  // Late game unit - more accessible tank
-  Knight: { costs: { gold: 70, food: 25 }, hp: 120, dmg: 15, range: 35, speed: 2, sprite: 'knight.png' },
+  // Late game unit - expensive powerhouse
+  Knight: { costs: { gold: 100, food: 35 }, hp: 140, dmg: 18, range: 35, speed: 2, sprite: 'knight.png' },
 };
 
-// Extended enemy types with better progression
+// More aggressive enemy types
 export const ENEMY_TYPES = {
-  goblin:    { baseHealth: 30, baseDamage: 5, color: 0x44ee44, sprite: 'goblin.png' },
-  orc:       { baseHealth: 60, baseDamage: 10, color: 0x888888, sprite: 'orc.png' },
-  troll:     { baseHealth: 120, baseDamage: 20, color: 0x9966cc, sprite: 'ogre.png' },
-  berserker: { baseHealth: 200, baseDamage: 35, color: 0xff4444, sprite: 'orc.png' },
-  warlord:   { baseHealth: 350, baseDamage: 50, color: 0x442288, sprite: 'ogre.png' },
+  // Early enemies (waves 1-20) - buffed significantly
+  goblin:    { baseHealth: 50, baseDamage: 8, color: 0x44ee44, sprite: 'goblin.png' },
+  
+  // Mid enemies (waves 15-50) - earlier introduction
+  orc:       { baseHealth: 90, baseDamage: 15, color: 0x888888, sprite: 'orc.png' },
+  
+  // Late enemies (waves 30-80)
+  troll:     { baseHealth: 160, baseDamage: 25, color: 0x9966cc, sprite: 'ogre.png' },
+  
+  // Ultra late enemies (waves 60+)
+  berserker: { baseHealth: 280, baseDamage: 40, color: 0xff4444, sprite: 'orc.png' },
+  warlord:   { baseHealth: 450, baseDamage: 60, color: 0x442288, sprite: 'ogre.png' },
 };
 
 // How long (in ms) we keep a clientId mapping without activity before it is purged.
@@ -80,11 +87,11 @@ export const UPGRADE_TYPES = {
     description: 'Increases gold gained from manual mining',
     category: 'mining',
     levels: [
-      { level: 1, cost: { gold: 30, food: 0 }, effect: { mineGoldAmount: 3 } },
-      { level: 2, cost: { gold: 80, food: 0 }, effect: { mineGoldAmount: 6 } },
-      { level: 3, cost: { gold: 200, food: 0 }, effect: { mineGoldAmount: 12 } },
-      { level: 4, cost: { gold: 500, food: 0 }, effect: { mineGoldAmount: 25 } },
-      { level: 5, cost: { gold: 1200, food: 0 }, effect: { mineGoldAmount: 50 } },
+      { level: 1, cost: { gold: 50, food: 0 }, effect: { mineGoldAmount: 2 } },
+      { level: 2, cost: { gold: 120, food: 0 }, effect: { mineGoldAmount: 3 } },
+      { level: 3, cost: { gold: 300, food: 0 }, effect: { mineGoldAmount: 5 } },
+      { level: 4, cost: { gold: 750, food: 0 }, effect: { mineGoldAmount: 8 } },
+      { level: 5, cost: { gold: 1500, food: 0 }, effect: { mineGoldAmount: 15 } },
     ]
   },
 
@@ -94,11 +101,11 @@ export const UPGRADE_TYPES = {
     description: 'Increases resource generation from all workers by 20% per level',
     category: 'workers',
     levels: [
-      { level: 1, cost: { gold: 60, food: 15 }, effect: { workerMultiplier: 1.2 } },
-      { level: 2, cost: { gold: 150, food: 40 }, effect: { workerMultiplier: 1.4 } },
-      { level: 3, cost: { gold: 400, food: 100 }, effect: { workerMultiplier: 1.6 } },
-      { level: 4, cost: { gold: 1000, food: 250 }, effect: { workerMultiplier: 1.8 } },
-      { level: 5, cost: { gold: 2500, food: 600 }, effect: { workerMultiplier: 2.0 } },
+      { level: 1, cost: { gold: 80, food: 20 }, effect: { workerMultiplier: 1.2 } },
+      { level: 2, cost: { gold: 200, food: 50 }, effect: { workerMultiplier: 1.4 } },
+      { level: 3, cost: { gold: 500, food: 125 }, effect: { workerMultiplier: 1.6 } },
+      { level: 4, cost: { gold: 1250, food: 300 }, effect: { workerMultiplier: 1.8 } },
+      { level: 5, cost: { gold: 3000, food: 750 }, effect: { workerMultiplier: 2.0 } },
     ]
   },
 
@@ -108,9 +115,9 @@ export const UPGRADE_TYPES = {
     description: 'Reduces cost of gold-generating workers by 15% per level',
     category: 'workers',
     levels: [
-      { level: 1, cost: { gold: 80, food: 10 }, effect: { goldWorkerCostReduction: 0.85 } },
-      { level: 2, cost: { gold: 200, food: 30 }, effect: { goldWorkerCostReduction: 0.7 } },
-      { level: 3, cost: { gold: 500, food: 80 }, effect: { goldWorkerCostReduction: 0.55 } },
+      { level: 1, cost: { gold: 100, food: 15 }, effect: { goldWorkerCostReduction: 0.85 } },
+      { level: 2, cost: { gold: 250, food: 40 }, effect: { goldWorkerCostReduction: 0.7 } },
+      { level: 3, cost: { gold: 600, food: 100 }, effect: { goldWorkerCostReduction: 0.55 } },
     ]
   },
 
@@ -120,9 +127,9 @@ export const UPGRADE_TYPES = {
     description: 'Reduces cost of food-generating workers by 15% per level',
     category: 'workers',
     levels: [
-      { level: 1, cost: { gold: 60, food: 15 }, effect: { foodWorkerCostReduction: 0.85 } },
-      { level: 2, cost: { gold: 150, food: 40 }, effect: { foodWorkerCostReduction: 0.7 } },
-      { level: 3, cost: { gold: 400, food: 100 }, effect: { foodWorkerCostReduction: 0.55 } },
+      { level: 1, cost: { gold: 75, food: 20 }, effect: { foodWorkerCostReduction: 0.85 } },
+      { level: 2, cost: { gold: 180, food: 50 }, effect: { foodWorkerCostReduction: 0.7 } },
+      { level: 3, cost: { gold: 450, food: 125 }, effect: { foodWorkerCostReduction: 0.55 } },
     ]
   },
 
@@ -132,11 +139,11 @@ export const UPGRADE_TYPES = {
     description: 'Increases health of all military units by 25% per level',
     category: 'military',
     levels: [
-      { level: 1, cost: { gold: 150, food: 50 }, effect: { unitHealthMultiplier: 1.25 } },
-      { level: 2, cost: { gold: 400, food: 120 }, effect: { unitHealthMultiplier: 1.5 } },
-      { level: 3, cost: { gold: 1000, food: 300 }, effect: { unitHealthMultiplier: 1.75 } },
-      { level: 4, cost: { gold: 2500, food: 800 }, effect: { unitHealthMultiplier: 2.0 } },
-      { level: 5, cost: { gold: 6000, food: 2000 }, effect: { unitHealthMultiplier: 2.25 } },
+      { level: 1, cost: { gold: 200, food: 60 }, effect: { unitHealthMultiplier: 1.25 } },
+      { level: 2, cost: { gold: 500, food: 150 }, effect: { unitHealthMultiplier: 1.5 } },
+      { level: 3, cost: { gold: 1250, food: 375 }, effect: { unitHealthMultiplier: 1.75 } },
+      { level: 4, cost: { gold: 3000, food: 900 }, effect: { unitHealthMultiplier: 2.0 } },
+      { level: 5, cost: { gold: 7500, food: 2250 }, effect: { unitHealthMultiplier: 2.25 } },
     ]
   },
 
@@ -146,11 +153,11 @@ export const UPGRADE_TYPES = {
     description: 'Increases damage of all military units by 20% per level',
     category: 'military',
     levels: [
-      { level: 1, cost: { gold: 120, food: 40 }, effect: { unitDamageMultiplier: 1.2 } },
-      { level: 2, cost: { gold: 350, food: 100 }, effect: { unitDamageMultiplier: 1.4 } },
-      { level: 3, cost: { gold: 900, food: 250 }, effect: { unitDamageMultiplier: 1.6 } },
-      { level: 4, cost: { gold: 2200, food: 600 }, effect: { unitDamageMultiplier: 1.8 } },
-      { level: 5, cost: { gold: 5500, food: 1500 }, effect: { unitDamageMultiplier: 2.0 } },
+      { level: 1, cost: { gold: 150, food: 50 }, effect: { unitDamageMultiplier: 1.2 } },
+      { level: 2, cost: { gold: 400, food: 125 }, effect: { unitDamageMultiplier: 1.4 } },
+      { level: 3, cost: { gold: 1000, food: 300 }, effect: { unitDamageMultiplier: 1.6 } },
+      { level: 4, cost: { gold: 2500, food: 750 }, effect: { unitDamageMultiplier: 1.8 } },
+      { level: 5, cost: { gold: 6000, food: 1800 }, effect: { unitDamageMultiplier: 2.0 } },
     ]
   },
 
@@ -160,35 +167,35 @@ export const UPGRADE_TYPES = {
     description: 'Reduces cost of all military units by 10% per level',
     category: 'military',
     levels: [
-      { level: 1, cost: { gold: 200, food: 60 }, effect: { unitCostReduction: 0.9 } },
-      { level: 2, cost: { gold: 600, food: 180 }, effect: { unitCostReduction: 0.8 } },
-      { level: 3, cost: { gold: 1500, food: 450 }, effect: { unitCostReduction: 0.7 } },
+      { level: 1, cost: { gold: 250, food: 75 }, effect: { unitCostReduction: 0.9 } },
+      { level: 2, cost: { gold: 750, food: 225 }, effect: { unitCostReduction: 0.8 } },
+      { level: 3, cost: { gold: 1800, food: 540 }, effect: { unitCostReduction: 0.7 } },
     ]
   },
 
   CASTLE_FORTIFICATION: {
     id: 'CASTLE_FORTIFICATION',
     name: 'Castle Fortification',
-    description: 'Increases maximum castle health by 250 per level',
+    description: 'Increases maximum castle health by 200 per level',
     category: 'castle',
     levels: [
-      { level: 1, cost: { gold: 300, food: 100 }, effect: { castleMaxHpIncrease: 250 } },
-      { level: 2, cost: { gold: 800, food: 250 }, effect: { castleMaxHpIncrease: 500 } },
-      { level: 3, cost: { gold: 2000, food: 600 }, effect: { castleMaxHpIncrease: 750 } },
-      { level: 4, cost: { gold: 5000, food: 1500 }, effect: { castleMaxHpIncrease: 1000 } },
-      { level: 5, cost: { gold: 12000, food: 3500 }, effect: { castleMaxHpIncrease: 1250 } },
+      { level: 1, cost: { gold: 400, food: 120 }, effect: { castleMaxHpIncrease: 200 } },
+      { level: 2, cost: { gold: 1000, food: 300 }, effect: { castleMaxHpIncrease: 400 } },
+      { level: 3, cost: { gold: 2500, food: 750 }, effect: { castleMaxHpIncrease: 600 } },
+      { level: 4, cost: { gold: 6000, food: 1800 }, effect: { castleMaxHpIncrease: 800 } },
+      { level: 5, cost: { gold: 15000, food: 4500 }, effect: { castleMaxHpIncrease: 1000 } },
     ]
   },
 
   CASTLE_REPAIRS: {
     id: 'CASTLE_REPAIRS',
     name: 'Castle Repairs',
-    description: 'Slowly regenerates castle health over time (10 HP per second per level)',
+    description: 'Slowly regenerates castle health over time (8 HP per second per level)',
     category: 'castle',
     levels: [
-      { level: 1, cost: { gold: 400, food: 100 }, effect: { castleRegenRate: 10 } },
-      { level: 2, cost: { gold: 1000, food: 250 }, effect: { castleRegenRate: 20 } },
-      { level: 3, cost: { gold: 2500, food: 600 }, effect: { castleRegenRate: 30 } },
+      { level: 1, cost: { gold: 500, food: 150 }, effect: { castleRegenRate: 8 } },
+      { level: 2, cost: { gold: 1250, food: 375 }, effect: { castleRegenRate: 16 } },
+      { level: 3, cost: { gold: 3000, food: 900 }, effect: { castleRegenRate: 24 } },
     ]
   },
   
@@ -198,22 +205,21 @@ export const UPGRADE_TYPES = {
     description: 'Units have a 10% chance per level to deal double damage',
     category: 'military',
     levels: [
-      { level: 1, cost: { gold: 400, food: 150 }, effect: { critChance: 0.1 } },
-      { level: 2, cost: { gold: 1000, food: 400 }, effect: { critChance: 0.2 } },
-      { level: 3, cost: { gold: 2500, food: 1000 }, effect: { critChance: 0.3 } },
+      { level: 1, cost: { gold: 500, food: 180 }, effect: { critChance: 0.1 } },
+      { level: 2, cost: { gold: 1250, food: 450 }, effect: { critChance: 0.2 } },
+      { level: 3, cost: { gold: 3000, food: 1200 }, effect: { critChance: 0.3 } },
     ]
   },
 
-  // New late game upgrade for variety
   OVERCHARGE: {
     id: 'OVERCHARGE',
     name: 'Overcharge',
-    description: 'Manual mining also gives food (2 food per gold mined)',
+    description: 'Manual mining also gives food (1 food per 2 gold mined)',
     category: 'mining',
     levels: [
-      { level: 1, cost: { gold: 300, food: 300 }, effect: { miningFoodRatio: 0.5 } },
-      { level: 2, cost: { gold: 800, food: 800 }, effect: { miningFoodRatio: 1.0 } },
-      { level: 3, cost: { gold: 2000, food: 2000 }, effect: { miningFoodRatio: 2.0 } },
+      { level: 1, cost: { gold: 400, food: 400 }, effect: { miningFoodRatio: 0.25 } },
+      { level: 2, cost: { gold: 1000, food: 1000 }, effect: { miningFoodRatio: 0.5 } },
+      { level: 3, cost: { gold: 2500, food: 2500 }, effect: { miningFoodRatio: 1.0 } },
     ]
   },
 };
