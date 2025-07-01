@@ -72,8 +72,8 @@ export const ENEMY_TYPES = {
   troll:     { baseHealth: 160, baseDamage: 25, color: 0x9966cc, sprite: 'ogre.png' },
   
   // Ultra late enemies (waves 60+)
-  berserker: { baseHealth: 280, baseDamage: 40, color: 0xff4444, sprite: 'orc.png' },
-  warlord:   { baseHealth: 450, baseDamage: 60, color: 0x442288, sprite: 'ogre.png' },
+  berserker: { baseHealth: 280, baseDamage: 40, color: 0xff4444, sprite: 'berserk.png' },
+  warlord:   { baseHealth: 450, baseDamage: 60, color: 0x442288, sprite: 'warlord.png' },
 };
 
 // How long (in ms) we keep a clientId mapping without activity before it is purged.
