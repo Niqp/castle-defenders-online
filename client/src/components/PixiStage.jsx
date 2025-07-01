@@ -6,10 +6,14 @@ import { Container, Graphics, Sprite, Texture, Assets, Text, extensions, ResizeP
 import swordsmanImg from '../sprites/units/swordsman.png';
 import archerImg from '../sprites/units/archer.png';
 import knightImg from '../sprites/units/knight.png';
+import priestImg from '../sprites/units/priest.png';
+import mageImg from '../sprites/units/mage.png';
 
 import goblinImg from '../sprites/units/goblin.png';
 import orcImg from '../sprites/units/orc.png';
 import ogreImg from '../sprites/units/ogre.png';
+import berserkImg from '../sprites/units/berserk.png';
+import warlordImg from '../sprites/units/warlord.png';
 import grassImg from '../sprites/background/grass.png';
 import roadImg from '../sprites/background/road.png';
 import stoneImg from '../sprites/background/stone.png';
@@ -20,9 +24,13 @@ const SPRITE_URLS = {
   swordsman: swordsmanImg,
   archer: archerImg,
   knight: knightImg,
+  priest: priestImg,
+  mage: mageImg,
   goblin: goblinImg,
   orc: orcImg,
   troll: ogreImg,
+  berserker: berserkImg,
+  warlord: warlordImg,
   grass: grassImg,
   road: roadImg,
   stone: stoneImg,

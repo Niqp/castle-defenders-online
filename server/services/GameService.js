@@ -184,7 +184,9 @@ export class GameService {
       
       const playerConfig = {
         maxHealth: modifiedStats.hp,
-        damage: modifiedStats.dmg
+        damage: modifiedStats.dmg,
+        // Include special properties like healAmount for Priests
+        ...modifiedStats
       };
       const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, rowToUse, player.name, type);
       this.gameState.addUnit(unit);

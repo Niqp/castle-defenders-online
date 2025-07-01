@@ -50,11 +50,13 @@ export class WaveSpawner {
           const enemyType = this._selectEnemyTypeByWave(enemyTypesArr, this.gameState.wave);
           const def = ENEMY_TYPES[enemyType] || WAVE_CONFIG.FALLBACK_ENEMY;
           
-          // Use base stats without scaling
+          // Use base stats without scaling and include special properties
           const enemyConfig = {
             maxHealth: def.baseHealth,
             damage: def.baseDamage,
             subtype: enemyType,
+            // Include special properties like selfHealPercent for berserkers
+            ...def
           };
           
           const enemy = spawnEnemyUnit(this.gameState.grid, enemyConfig, aliveRows[row]);

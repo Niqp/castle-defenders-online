@@ -6,6 +6,8 @@ import { EVENTS } from '../events.js';
 import swordsmanImg from '../sprites/units/swordsman.png';
 import archerImg from '../sprites/units/archer.png';
 import knightImg from '../sprites/units/knight.png';
+import priestImg from '../sprites/units/priest.png';
+import mageImg from '../sprites/units/mage.png';
 import minerImg from '../sprites/workers/miner.png';
 import diggerImg from '../sprites/workers/digger.png';
 import excavatorImg from '../sprites/workers/excavator.png';
@@ -25,6 +27,8 @@ const SPRITE_MAP = {
   'swordsman.png': swordsmanImg,
   'archer.png': archerImg,
   'knight.png': knightImg,
+  'priest.png': priestImg,
+  'mage.png': mageImg,
   'miner.png': minerImg,
   'digger.png': diggerImg,
   'excavator.png': excavatorImg,

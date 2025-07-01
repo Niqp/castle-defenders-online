@@ -10,11 +10,29 @@ class PlayerUnit extends Unit {
    * @param {number} params.col – Initial grid column
    * @param {string} params.owner – Player name that spawned the unit
    * @param {string} params.unitType – Logical unit class (e.g. "Swordsman")
+   * @param {number} [params.healAmount] – Heal amount for Priests
    */
-  constructor({ maxHealth, damage, row, col, owner, unitType }) {
+  constructor(params) {
+    const { maxHealth, damage, row, col, owner, unitType } = params;
     super({ type: 'player', maxHealth, damage, row, col });
     this.owner = owner;
     this.unitType = unitType; // Used for UI counters
+    
+    // Store special abilities and other properties
+    if (params.healAmount !== undefined) {
+      this.healAmount = params.healAmount;
+    }
+    
+    // Store any other special properties from the unit config
+    const specialProps = { ...params };
+    delete specialProps.maxHealth;
+    delete specialProps.damage;
+    delete specialProps.row;
+    delete specialProps.col;
+    delete specialProps.owner;
+    delete specialProps.unitType;
+    
+    Object.assign(this, specialProps);
   }
 
   /**
@@ -25,6 +43,8 @@ class PlayerUnit extends Unit {
       ...super.toJSON(),
       owner: this.owner,
       unitType: this.unitType,
+      healAmount: this.healAmount,
+      attacksAll: this.attacksAll
     };
   }
 }
