@@ -665,91 +665,121 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
 
             {/* Military Tab */}
             {activeTab === 'military' && (
-              <div className="card bg-base-300 shadow-md compact">
-                <div className="card-body p-3 sm:p-4">
-                  <h3 className="card-title text-md sm:text-lg">Military Units</h3>
-                  <div className="space-y-2 mt-2">
-                    {unitTypes.map(unit => {
-                      const hasUpgrades = unit.cost !== unit.originalCost || unit.hp !== unit.originalHp || unit.dmg !== unit.originalDmg;
-                      return (
-                        <div key={unit.type} className="flex items-center justify-between p-3 bg-base-400 rounded-md">
-                          <div className="flex-1">
-                            <div className="flex items-center mb-1">
-                              {SPRITE_MAP[unit.sprite] && <img src={SPRITE_MAP[unit.sprite]} alt={unit.type} className="w-5 h-5 mr-2" />}
-                              <p className="font-semibold text-sm sm:text-base">{unit.type}</p>
-                              <span className="badge badge-neutral badge-sm ml-2">x{unit.current}</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-base-content/70">Cost: </span>
-                                <span className={hasUpgrades ? 'text-green-400' : ''}>
-                                  {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
-                                </span>
-                                {hasUpgrades && (
-                                  <span className="text-base-content/50 line-through ml-1">
-                                    {Object.entries(unit.originalCost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <span className="text-base-content/70">HP: </span>
-                                <span className={unit.hp !== unit.originalHp ? 'text-blue-400' : ''}>{unit.hp}</span>
-                                {unit.hp !== unit.originalHp && (
-                                  <span className="text-base-content/50 line-through ml-1">{unit.originalHp}</span>
-                                )}
-                                <span className="text-base-content/70 ml-2">DMG: </span>
-                                <span className={unit.dmg !== unit.originalDmg ? 'text-red-400' : ''}>{unit.dmg}</span>
-                                {unit.dmg !== unit.originalDmg && (
-                                  <span className="text-base-content/50 line-through ml-1">{unit.originalDmg}</span>
-                                )}
-                              </div>
+              <>
+                {unitTypes.map(unit => {
+                  const hasUpgrades = unit.cost !== unit.originalCost || unit.hp !== unit.originalHp || unit.dmg !== unit.originalDmg;
+                  return (
+                    <div key={unit.type} className="card bg-base-300 shadow-md compact">
+                      <div className="card-body p-3 sm:p-4">
+                        {/* Header with unit info */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            {SPRITE_MAP[unit.sprite] && (
+                              <img src={SPRITE_MAP[unit.sprite]} alt={unit.type} className="w-8 h-8" />
+                            )}
+                            <div>
+                              <h4 className="font-semibold text-sm sm:text-base">{unit.type}</h4>
+                              <span className="badge badge-neutral badge-sm">x{unit.current} active</span>
                             </div>
                           </div>
                           <button 
-                            className="btn btn-accent btn-sm ml-2" 
+                            className="btn btn-accent btn-sm" 
                             onClick={() => handleSpawnUnit(unit.type)}
                             disabled={!playerAlive || !canAfford(unit.cost)}
                           >
                             Spawn
                           </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                  {rows > 1 && (
-                    <div className="form-control mt-4">
-                      <label className="label justify-between">
-                        <span className="label-text text-xs sm:text-sm">Spawn Row</span>
-                        <span className="label-text-alt text-xs">{selectedCol + 1}</span>
-                      </label>
-                      {rows <= 8 ? (
-                        <div className="grid gap-1 pt-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
-                          {Array.from({ length: rows }).map((_, idx) => (
-                            <button
-                              key={idx}
-                              className={`btn btn-xs sm:btn-sm ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
-                              onClick={() => setSelectedCol(idx)}
-                              disabled={!playerAlive}
-                            >{idx + 1}</button>
-                          ))}
-                        </div>
-                      ) : (
-                        <input
-                          type="range"
-                          min="0"
-                          max={rows - 1}
-                          step="1"
-                          value={selectedCol}
-                          onChange={(e) => setSelectedCol(Number(e.target.value))}
-                          className="range range-accent range-xs"
-                          disabled={!playerAlive}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+
+                        {/* Stats grid */}
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          {/* Cost */}
+                          <div className="bg-base-200 p-2 rounded">
+                            <div className="text-base-content/70 mb-1">Cost</div>
+                            <div className="font-medium">
+                              {hasUpgrades ? (
+                                <>
+                                  <div className="text-green-400">
+                                    {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                  </div>
+                                  <div className="text-base-content/50 line-through text-xs">
+                                    {Object.entries(unit.originalCost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                  </div>
+                                </>
+                              ) : (
+                                <div>
+                                  {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Health */}
+                          <div className="bg-base-200 p-2 rounded">
+                            <div className="text-base-content/70 mb-1">Health</div>
+                            <div className="font-medium">
+                              <span className={unit.hp !== unit.originalHp ? 'text-blue-400' : ''}>{unit.hp}</span>
+                              {unit.hp !== unit.originalHp && (
+                                <div className="text-base-content/50 line-through text-xs">{unit.originalHp}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Damage */}
+                          <div className="bg-base-200 p-2 rounded">
+                            <div className="text-base-content/70 mb-1">Damage</div>
+                            <div className="font-medium">
+                              <span className={unit.dmg !== unit.originalDmg ? 'text-red-400' : ''}>{unit.dmg}</span>
+                              {unit.dmg !== unit.originalDmg && (
+                                <div className="text-base-content/50 line-through text-xs">{unit.originalDmg}</div>
+                              )}
+                            </div>
+                          </div>
+                                                 </div>
+                       </div>
+                     </div>
+                   );
+                 })}
+
+                 {/* Row Selection for Military */}
+                 {rows > 1 && (
+                   <div className="card bg-base-300 shadow-md compact">
+                     <div className="card-body p-3 sm:p-4">
+                       <h3 className="card-title text-md sm:text-lg">Deployment</h3>
+                       <div className="form-control mt-2">
+                         <label className="label justify-between">
+                           <span className="label-text text-xs sm:text-sm">Spawn Row</span>
+                           <span className="label-text-alt text-xs">{selectedCol + 1}</span>
+                         </label>
+                         {rows <= 8 ? (
+                           <div className="grid gap-1 pt-1" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
+                             {Array.from({ length: rows }).map((_, idx) => (
+                               <button
+                                 key={idx}
+                                 className={`btn btn-xs sm:btn-sm ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
+                                 onClick={() => setSelectedCol(idx)}
+                                 disabled={!playerAlive}
+                               >{idx + 1}</button>
+                             ))}
+                           </div>
+                         ) : (
+                           <input
+                             type="range"
+                             min="0"
+                             max={rows - 1}
+                             step="1"
+                             value={selectedCol}
+                             onChange={(e) => setSelectedCol(Number(e.target.value))}
+                             className="range range-accent range-xs"
+                             disabled={!playerAlive}
+                           />
+                         )}
+                       </div>
+                     </div>
+                   </div>
+                 )}
+               </>
+             )}
 
             {/* Stats Tab */}
             {activeTab === 'stats' && (
