@@ -13,11 +13,11 @@ export const GRID_CONFIG = {
   MIN_ROWS: 7, // Minimum lanes (scales up with player count)
 };
 
-// Wave spawning and difficulty scaling
+// Wave spawning and enemy progression
 export const WAVE_CONFIG = {
-  BASE_ENEMIES_PER_WAVE: 3, // Base number of enemies, increases by 1 per wave
-  HEALTH_SCALING_PER_WAVE: 2, // Health increase per wave
-  DAMAGE_SCALING_DIVISOR: 2, // Damage increases every N waves
+  BASE_ENEMIES_PER_WAVE: 3, // Base number of enemies per wave
+  ENEMIES_PER_PLAYER_SCALING: 0.5, // Additional enemies per wave per 2 active players (0.5 = 1 enemy per 2 players)
+  LAST_SCALING_WAVE: 10, // Wave number where enemy type progression completes (100% last enemy type)
   FALLBACK_ENEMY: { 
     baseHealth: 10, 
     baseDamage: 2 
