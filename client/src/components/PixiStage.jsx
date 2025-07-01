@@ -199,8 +199,21 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       const now = Date.now();
 
       const target = targetPosRef.current.get(unitId);
-      // Safety check: if target position doesn't exist, skip this frame
-      if (!target) return;
+      const unitMeta = metaRef.current.get(unitId);
+      
+      // Safety check: if target position or unit metadata doesn't exist, hide the sprite and skip this frame
+      // This prevents "flying sprite" bug when units reach castle and get removed
+      if (!target || !unitMeta) {
+        if (containerRef.current) {
+          containerRef.current.visible = false;
+        }
+        return;
+      }
+      
+      // Ensure sprite is visible for valid units
+      if (containerRef.current) {
+        containerRef.current.visible = true;
+      }
       
       const prev = prevPosRef.current.get(unitId) || target;
       const lastMove = moveTimeRef.current.get(unitId) || now;
@@ -212,7 +225,6 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       // Simple sprite mirroring based on unit type
       // Player units face right, enemy units face left
       if (spriteRef.current) {
-        const unitMeta = metaRef.current.get(unitId);
         const isPlayer = unitMeta?.type === 'player';
         
         if (isPlayer) {
@@ -227,7 +239,6 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
       // Battle offset (re-use original logic)
       let battleOffsetX = 0;
       let battleOffsetY = 0;
-      const unitMeta = metaRef.current.get(unitId);
       const unitType = unitMeta?.type === 'enemy' ? 'enemy' : 'player';
 
       const RETURN_MS = 300;

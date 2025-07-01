@@ -1,4 +1,4 @@
-import { TIMINGS, ENEMY_TYPES } from '../config.js';
+import { TIMINGS, ENEMY_TYPES, WAVE_CONFIG } from '../config.js';
 import { EVENTS } from '../events.js';
 import { spawnEnemyUnit, spawnPlayerUnit } from '../game/Spawner.js';
 
@@ -17,7 +17,7 @@ export class WaveSpawner {
         this.gameState.addUnit = () => {};
       }
       this.gameState.wave = (this.gameState.wave || 0) + 1;
-      const num = 3 + this.gameState.wave;
+      const num = WAVE_CONFIG.BASE_ENEMIES_PER_WAVE + this.gameState.wave;
       const newEnemies = [];
       const enemyTypeKeys = Object.keys(ENEMY_TYPES);
       const enemyTypesArr = enemyTypeKeys.length ? enemyTypeKeys : ['basic'];
@@ -28,10 +28,10 @@ export class WaveSpawner {
       }
       for (let i = 0; i < num; i++) {
         const enemyType = enemyTypesArr[(this.gameState.wave + i) % enemyTypesArr.length];
-        const def = ENEMY_TYPES[enemyType] || { baseHealth: 10, baseDamage: 2 };
+        const def = ENEMY_TYPES[enemyType] || WAVE_CONFIG.FALLBACK_ENEMY;
         const enemyConfig = {
-          maxHealth: def.baseHealth + this.gameState.wave * 2,
-          damage: def.baseDamage + Math.floor(this.gameState.wave / 2),
+          maxHealth: def.baseHealth + this.gameState.wave * WAVE_CONFIG.HEALTH_SCALING_PER_WAVE,
+          damage: def.baseDamage + Math.floor(this.gameState.wave / WAVE_CONFIG.DAMAGE_SCALING_DIVISOR),
           subtype: enemyType,
         };
         // Choose a random alive row to spawn this enemy

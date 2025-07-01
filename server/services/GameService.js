@@ -1,4 +1,4 @@
-import { WORKER_TYPES, UNIT_TYPES, ENEMY_TYPES, TIMINGS } from '../config.js';
+import { WORKER_TYPES, UNIT_TYPES, ENEMY_TYPES, TIMINGS, GAME_BALANCE } from '../config.js';
 import { EVENTS } from '../events.js';
 import { ResourceTicker } from '../ticker/ResourceTicker.js';
 import { WaveSpawner } from '../ticker/WaveSpawner.js';
@@ -66,7 +66,7 @@ export class GameService {
     // -----------------------------------------------------
     if (this.gameState) {
       // a) Extend GameState with new player/column
-      const col = this.gameState.addPlayer(name, 1000);
+      const col = this.gameState.addPlayer(name, GAME_BALANCE.INITIAL_CASTLE_HP);
       if (col < 0) {
         // Player already present – just sync state
         this.syncState(socket, name);
@@ -173,7 +173,7 @@ export class GameService {
   startGame() {
     this._clearIntervals();
     // Use new GameState with grid and castle health
-    this.gameState = new GameState([...this.lobby.players], undefined, 1000);
+    this.gameState = new GameState([...this.lobby.players], undefined, GAME_BALANCE.INITIAL_CASTLE_HP);
     // Initialize player objects for resource tracking (legacy compatibility)
     this.gameState.players = this.lobby.players.map(name => ({
       name,

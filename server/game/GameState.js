@@ -1,13 +1,14 @@
 // GameState.js - Holds main game state, grid, and per-player castle health tracking
-import Grid, { DEFAULT_COLUMNS } from '../grid/Grid.js';
+import Grid from '../grid/Grid.js';
+import { GRID_CONFIG } from '../config.js';
 
 class GameState {
   /**
    * @param {string[]} playerNames – Ordered list of players. Each gets a dedicated row.
-   * @param {number} columns – Grid columns (default DEFAULT_COLUMNS)
+   * @param {number} columns – Grid columns (default GRID_CONFIG.DEFAULT_COLUMNS)
    * @param {number} initialCastleHp – Starting HP for every castle
    */
-  constructor(playerNames = [], columns = DEFAULT_COLUMNS, initialCastleHp = 100) {
+  constructor(playerNames = [], columns = GRID_CONFIG.DEFAULT_COLUMNS, initialCastleHp = 100) {
     if (!Array.isArray(playerNames)) {
       throw new Error('GameState expects an array of playerNames');
     }

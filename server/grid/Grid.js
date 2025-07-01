@@ -1,8 +1,9 @@
 // Grid.js
 // Manages the game grid for castle defenders
 
-const DEFAULT_COLUMNS = 12; // Distance from castle to portal
-const MIN_ROWS = 7; // Minimum lanes (scales up with player count)
+import { GRID_CONFIG } from '../config.js';
+
+const { DEFAULT_COLUMNS, MIN_ROWS } = GRID_CONFIG;
 
 class Grid {
   constructor(playerCount = 1, columns = DEFAULT_COLUMNS) {
@@ -164,4 +165,3 @@ class Grid {
 }
 
 export default Grid;
-export { DEFAULT_COLUMNS, MIN_ROWS };

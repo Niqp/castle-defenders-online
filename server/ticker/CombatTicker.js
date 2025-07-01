@@ -1,4 +1,4 @@
-import { TIMINGS } from '../config.js';
+import { TIMINGS, GAME_BALANCE } from '../config.js';
 import { EVENTS } from '../events.js';
 import * as Movement from '../game/Movement.js';
 import * as Battle from '../game/Battle.js';
@@ -23,7 +23,7 @@ export class CombatTicker {
         */
         Movement.moveEnemyUnits(this.gameState.grid, (enemy, row) => {
           // Enemy reached castle: apply damage to the owner of this row and remove unit
-          this.gameState.applyCastleDamage(row, enemy.damage || 10);
+          this.gameState.applyCastleDamage(row, enemy.damage || GAME_BALANCE.DEFAULT_CASTLE_DAMAGE);
           this.gameState.removeUnit(enemy);
         });
         Movement.movePlayerUnits(this.gameState.grid, (playerUnit, row) => {
