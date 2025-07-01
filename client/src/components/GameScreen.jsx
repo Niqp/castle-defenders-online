@@ -349,20 +349,40 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const gridReady = useMemo(() => Array.isArray(grid) && grid.length && Array.isArray(grid[0]), [grid]);
   const stageReady = gridReady && pixiContainerRef.current !== null;
 
+  // Helper functions for upgrade effects
+  const getUpgradeEffect = (upgradeType, level, effectKey, defaultValue) => {
+    if (!upgradeType || level === 0) return defaultValue;
+    const levelData = upgradeType.levels?.find(l => l.level === level);
+    return levelData?.effect[effectKey] ?? defaultValue;
+  };
+
   // Calculate resource per tick based on workers
   const calculateResourcePerTick = (workerCounts, workerTypes) => {
     const resourcePerTick = { gold: 0, food: 0 };
     
     if (!workerTypes || !workerCounts) return resourcePerTick;
     
+    // Apply worker productivity upgrade
+    const productivityLevel = upgrades.WORKER_PRODUCTIVITY || 0;
+    const productivityMultiplier = getUpgradeEffect(gameState?.upgradeTypes?.WORKER_PRODUCTIVITY, productivityLevel, 'workerMultiplier', 1);
+    
+    // Apply cooperative bonus (3% per additional player)
+    const playerCount = gameState?.players?.length || 1;
+    const coopBonus = 1 + ((playerCount - 1) * 0.03);
+    
     Object.entries(workerTypes).forEach(([type, config]) => {
       const count = workerCounts[type] || 0;
       if (count > 0 && config.outputs) {
         Object.entries(config.outputs).forEach(([resource, amount]) => {
-          resourcePerTick[resource] = (resourcePerTick[resource] || 0) + (count * amount);
+          const modifiedAmount = amount * productivityMultiplier * coopBonus;
+          resourcePerTick[resource] = (resourcePerTick[resource] || 0) + (count * modifiedAmount);
         });
       }
     });
+    
+    // Round to 1 decimal place for display
+    resourcePerTick.gold = Math.round(resourcePerTick.gold * 10) / 10;
+    resourcePerTick.food = Math.round(resourcePerTick.food * 10) / 10;
     
     return resourcePerTick;
   };
@@ -371,13 +391,6 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const currentPlayerResourcePerTick = useMemo(() => {
     return calculateResourcePerTick(workers, gameState?.workerTypes);
   }, [workers, gameState?.workerTypes]);
-
-  // Helper functions for upgrade effects
-  const getUpgradeEffect = (upgradeType, level, effectKey, defaultValue) => {
-    if (!upgradeType || level === 0) return defaultValue;
-    const levelData = upgradeType.levels?.find(l => l.level === level);
-    return levelData?.effect[effectKey] ?? defaultValue;
-  };
 
   const getModifiedWorkerCost = (workerReq, upgrades, upgradeTypes) => {
     if (!upgrades || !upgradeTypes) return workerReq.costs;
@@ -606,7 +619,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     </svg>
                     <span className="font-semibold text-sm">{gold}</span>
                     {currentPlayerResourcePerTick.gold > 0 && (
-                      <span className="text-xs text-yellow-400">(+{currentPlayerResourcePerTick.gold}/s)</span>
+                      <span className="text-xs text-yellow-400">(+{currentPlayerResourcePerTick.gold % 1 === 0 ? currentPlayerResourcePerTick.gold : currentPlayerResourcePerTick.gold.toFixed(1)}/s)</span>
                     )}
                   </div>
                 </div>
@@ -617,7 +630,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     </svg>
                     <span className="font-semibold text-sm">{food}</span>
                     {currentPlayerResourcePerTick.food > 0 && (
-                      <span className="text-xs text-green-400">(+{currentPlayerResourcePerTick.food}/s)</span>
+                      <span className="text-xs text-green-400">(+{currentPlayerResourcePerTick.food % 1 === 0 ? currentPlayerResourcePerTick.food : currentPlayerResourcePerTick.food.toFixed(1)}/s)</span>
                     )}
                   </div>
                 </div>
@@ -675,7 +688,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                   </svg>
                   <span className="font-semibold text-sm">{gold}</span>
                   {currentPlayerResourcePerTick.gold > 0 && (
-                    <span className="text-xs text-yellow-400">(+{currentPlayerResourcePerTick.gold})</span>
+                    <span className="text-xs text-yellow-400">(+{currentPlayerResourcePerTick.gold % 1 === 0 ? currentPlayerResourcePerTick.gold : currentPlayerResourcePerTick.gold.toFixed(1)})</span>
                   )}
                 </div>
                 <div className="flex items-center space-x-1.5 bg-base-300 px-2.5 py-1.5 rounded-lg">
@@ -684,7 +697,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                   </svg>
                   <span className="font-semibold text-sm">{food}</span>
                   {currentPlayerResourcePerTick.food > 0 && (
-                    <span className="text-xs text-green-400">(+{currentPlayerResourcePerTick.food})</span>
+                    <span className="text-xs text-green-400">(+{currentPlayerResourcePerTick.food % 1 === 0 ? currentPlayerResourcePerTick.food : currentPlayerResourcePerTick.food.toFixed(1)})</span>
                   )}
                 </div>
               </div>

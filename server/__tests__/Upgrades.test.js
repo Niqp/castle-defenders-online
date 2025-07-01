@@ -171,9 +171,27 @@ describe('Upgrade System', () => {
 
       resourceTicker.tick();
 
-      // Base output: 1 gold/s, with 2 players cooperative bonus (1.1x): 1.1 gold/s each
-      expect(mockPlayers[0].gold).toBe(1.1);
-      expect(mockPlayers[1].gold).toBe(1.1);
+      // Base output: 1 gold/s, with 2 players cooperative bonus (1.03x): 1.03 gold/s each
+      expect(mockPlayers[0].gold).toBe(1.03);
+      expect(mockPlayers[1].gold).toBe(1.03);
+    });
+
+    it('should handle decimal production values correctly with upgrades', () => {
+      const mockPlayers = [{ 
+        name: 'testPlayer', 
+        gold: 0, 
+        food: 0,
+        workers: { Farmer: 2 }, // 2 farmers with 0.5 base food each
+        upgrades: { WORKER_PRODUCTIVITY: 2 } // 1.4x multiplier
+      }];
+
+      const mockSocketToName = new Map();
+      const resourceTicker = new ResourceTicker(mockIO, mockSocketToName, mockPlayers);
+
+      resourceTicker.tick();
+
+      // 2 farmers * 0.5 food/s * 1.4 (productivity) * 1.0 (no coop bonus) = 1.4 food/s
+      expect(mockPlayers[0].food).toBe(1.4);
     });
   });
 
@@ -260,7 +278,7 @@ describe('Upgrade System', () => {
   describe('Castle Upgrades', () => {
     it('should immediately increase castle HP with Fortification', () => {
       const player = gameService._getPlayer(mockSocket);
-      player.gold = 1000;
+      player.gold = 2000; // Ensure enough resources
       player.food = 1000;
       
       const initialCastleHp = gameService.gameState.castleHealth['testPlayer'];
@@ -313,7 +331,7 @@ describe('Upgrade System', () => {
       expect(overchargeUpgrade).toBeDefined();
       expect(overchargeUpgrade.category).toBe('mining');
       expect(overchargeUpgrade.levels[0].effect.miningFoodRatio).toBe(0.25);
-      expect(overchargeUpgrade.levels[2].effect.miningFoodRatio).toBe(1.0);
+      expect(overchargeUpgrade.levels[1].effect.miningFoodRatio).toBe(0.5);
     });
 
     it('should give food when mining with Overcharge upgrade', () => {
@@ -334,12 +352,12 @@ describe('Upgrade System', () => {
       player.gold = 0;
       player.food = 0;
       player.upgrades.MINING_EFFICIENCY = 5; // 15 gold per click
-      player.upgrades.OVERCHARGE = 3; // 1.0 food per gold ratio
+      player.upgrades.OVERCHARGE = 2; // 0.5 food per gold ratio (max level for Overcharge)
 
       gameService.mine(mockSocket);
       
       expect(player.gold).toBe(15);
-      expect(player.food).toBe(15); // 1:1 ratio at max level
+      expect(player.food).toBe(Math.floor(15 * 0.5)); // 7 food (15 * 0.5, floored)
     });
 
     it('should not give food without Overcharge upgrade', () => {

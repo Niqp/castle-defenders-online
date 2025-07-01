@@ -200,7 +200,8 @@ export default function WorkerCard({
     
     const upgradedOutputs = {};
     Object.entries(baseOutputs).forEach(([resource, amount]) => {
-      upgradedOutputs[resource] = Math.floor(amount * multiplier);
+      // Preserve decimal precision and round to 1 decimal place for display
+      upgradedOutputs[resource] = Math.round(amount * multiplier * 10) / 10;
     });
     
     return upgradedOutputs;
@@ -400,19 +401,19 @@ export default function WorkerCard({
                       <>
                         <span className="text-blue-400 font-medium text-xs">
                           +{Object.entries(upgradedOutputs)
-                            .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                            .map(([r, v]) => `${v % 1 === 0 ? v : v.toFixed(1)}${r[0].toUpperCase()}`)
                             .join('/')}/s
                         </span>
                         <span className="line-through opacity-50 text-xs">
                           +{Object.entries(baseOutputs)
-                            .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                            .map(([r, v]) => `${v % 1 === 0 ? v : v.toFixed(1)}${r[0].toUpperCase()}`)
                             .join('/')}/s
                         </span>
                       </>
                     ) : (
                       <span className="font-medium text-xs">
                         +{Object.entries(baseOutputs)
-                          .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                          .map(([r, v]) => `${v % 1 === 0 ? v : v.toFixed(1)}${r[0].toUpperCase()}`)
                           .join('/')}/s
                       </span>
                     )}

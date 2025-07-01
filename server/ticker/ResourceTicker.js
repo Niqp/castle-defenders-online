@@ -17,9 +17,9 @@ export class ResourceTicker {
           const productivityLevel = p.upgrades?.WORKER_PRODUCTIVITY || 0;
           const productivityMultiplier = this._getUpgradeEffect(UPGRADE_TYPES.WORKER_PRODUCTIVITY, productivityLevel, 'workerMultiplier', 1);
           
-          // Apply cooperative bonus (10% per additional player)
+          // Apply cooperative bonus (3% per additional player)
           const playerCount = this.players.length;
-          const coopBonus = 1 + ((playerCount - 1) * 0.1);
+          const coopBonus = 1 + ((playerCount - 1) * 0.03);
           
           for (const [res, amount] of Object.entries(outputs)) {
             const baseAmount = amount * productivityMultiplier * coopBonus;
@@ -88,9 +88,9 @@ export class ResourceTicker {
             const productivityLevel = p.upgrades?.WORKER_PRODUCTIVITY || 0;
             const productivityMultiplier = this._getUpgradeEffect(UPGRADE_TYPES.WORKER_PRODUCTIVITY, productivityLevel, 'workerMultiplier', 1);
             
-            // Apply cooperative bonus (10% per additional player)
-            const playerCount = this.players.length;
-            const coopBonus = 1 + ((playerCount - 1) * 0.1);
+                    // Apply cooperative bonus (3% per additional player)
+        const playerCount = this.players.length;
+        const coopBonus = 1 + ((playerCount - 1) * 0.03);
             
             for (const [res, amount] of Object.entries(outputs)) {
               const baseAmount = amount * productivityMultiplier * coopBonus;
