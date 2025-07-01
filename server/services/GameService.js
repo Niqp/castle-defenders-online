@@ -1,9 +1,10 @@
-import { WORKER_TYPES, UNIT_TYPES, ENEMY_TYPES, TIMINGS, GAME_BALANCE } from '../config.js';
+import { WORKER_TYPES, UNIT_TYPES, ENEMY_TYPES, TIMINGS, GAME_BALANCE, UPGRADE_TYPES } from '../config.js';
 import { EVENTS } from '../events.js';
 import { ResourceTicker } from '../ticker/ResourceTicker.js';
 import { WaveSpawner } from '../ticker/WaveSpawner.js';
 import { CountdownTicker } from '../ticker/CountdownTicker.js';
 import { CombatTicker } from '../ticker/CombatTicker.js';
+import { CastleRegenTicker } from '../ticker/CastleRegenTicker.js';
 // New grid-based imports
 import GameState from '../game/GameState.js';
 import { spawnEnemyUnit, spawnPlayerUnit } from '../game/Spawner.js';
@@ -81,7 +82,8 @@ export class GameService {
         iron: 0,
         jewels: 0,
         workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
-        units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0]))
+        units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
+        upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0]))
       };
       this.gameState.players.push(newPlayerObj);
 
@@ -122,14 +124,26 @@ export class GameService {
   mine(socket) {
     const name = this.socketToName.get(socket.id);
     if (!this.gameState?.isPlayerAlive(name)) return; // eliminated players cannot act
-    this._modifyResource(socket, 'gold', 1);
+    
+    const player = this._getPlayer(socket);
+    const miningEfficiencyLevel = player?.upgrades?.MINING_EFFICIENCY || 0;
+    const goldAmount = this._getUpgradeEffect(UPGRADE_TYPES.MINING_EFFICIENCY, miningEfficiencyLevel, 'mineGoldAmount', 1);
+    
+    this._modifyResource(socket, 'gold', goldAmount);
   }
 
   hireWorker(socket, type) {
     const name = this.socketToName.get(socket.id);
     if (!this.gameState?.isPlayerAlive(name)) return;
+    
     const req = WORKER_TYPES[type];
-    this._purchase(socket, req, 'workers', type);
+    if (!req) return;
+    
+    // Apply worker cost reduction upgrades
+    const player = this._getPlayer(socket);
+    const modifiedReq = this._getModifiedWorkerCost(req, player);
+    
+    this._purchase(socket, modifiedReq, 'workers', type);
   }
 
   /**
@@ -147,10 +161,19 @@ export class GameService {
     const rowToUse = selectedRow !== null ? selectedRow : defaultRow;
 
     const req = UNIT_TYPES[type];
-    this._purchase(socket, req, 'units', type, (player) => {
+    if (!req) return;
+    
+    // Apply unit cost reduction upgrades
+    const player = this._getPlayer(socket);
+    const modifiedReq = this._getModifiedUnitCost(req, player);
+    
+    this._purchase(socket, modifiedReq, 'units', type, (player) => {
+      // Apply unit stat upgrades
+      const modifiedStats = this._getModifiedUnitStats(req, player);
+      
       const playerConfig = {
-        maxHealth: req.hp,
-        damage: req.dmg
+        maxHealth: modifiedStats.hp,
+        damage: modifiedStats.dmg
       };
       const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, rowToUse, player.name, type);
       this.gameState.addUnit(unit);
@@ -182,7 +205,8 @@ export class GameService {
       iron: 0,
       jewels: 0,
       workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
-      units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0]))
+      units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
+      upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0]))
     }));
     this.gameState.wave = 1;
     this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
@@ -193,7 +217,8 @@ export class GameService {
       players: this.gameState.players,
       workerTypes: WORKER_TYPES,
       unitTypes: UNIT_TYPES,
-      enemyTypes: ENEMY_TYPES
+      enemyTypes: ENEMY_TYPES,
+      upgradeTypes: UPGRADE_TYPES
     });
     // Start modular tickers with new state
     this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
@@ -204,9 +229,11 @@ export class GameService {
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
     });
     this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState, this);
+    this.castleRegenTicker = new CastleRegenTicker(this.io, this.roomId, this.gameState);
     this.resourceTicker.start();
     this.countdownTicker.start();
     this.combatTicker.start();
+    this.castleRegenTicker.start();
   }
 
   _modifyResource(socket, key, amount) {
@@ -269,13 +296,11 @@ export class GameService {
   }
 
   _clearIntervals() {
-    // stop modular tickers if running
-    this.resourceTicker?.stop();
-    if (this.waveSpawner && typeof this.waveSpawner.stop === 'function') {
-      this.waveSpawner.stop();
-    }
-    this.countdownTicker?.stop();
-    this.combatTicker?.stop();
+    [this.resourceTicker, this.waveSpawner, this.countdownTicker, this.combatTicker, this.castleRegenTicker].forEach(ticker => {
+      if (ticker && typeof ticker.stop === 'function') {
+        ticker.stop();
+      }
+    });
   }
 
   /**
@@ -314,13 +339,15 @@ export class GameService {
       workerTypes: WORKER_TYPES,
       unitTypes: UNIT_TYPES,
       enemyTypes: ENEMY_TYPES,
+      upgradeTypes: UPGRADE_TYPES,
       playerName,
       roomId: this.roomId,
       // Player-specific live resources at reconnect time
       gold: Math.floor(player?.gold ?? 0),
       food: Math.floor(player?.food ?? 0),
       workers: player?.workers ?? {},
-      playerUnits: player?.units ?? {}
+      playerUnits: player?.units ?? {},
+      upgrades: player?.upgrades ?? {}
     };
 
     socket.emit(EVENTS.RESTORE_GAME, { gameState: payload, playerName, roomId: this.roomId });
@@ -328,5 +355,129 @@ export class GameService {
     // Also send a direct RESOURCE_UPDATE so the client UI can hydrate even if it
     // relies purely on that event stream.
     if (player) this._emitResourceUpdate(socket, player);
+  }
+
+  // Helper methods for upgrade effects
+  _getUpgradeEffect(upgradeType, level, effectKey, defaultValue) {
+    if (level === 0) return defaultValue;
+    const levelData = upgradeType.levels.find(l => l.level === level);
+    return levelData?.effect[effectKey] ?? defaultValue;
+  }
+
+  _getModifiedWorkerCost(workerReq, player) {
+    if (!player?.upgrades) return workerReq;
+    
+    const modifiedReq = { ...workerReq, costs: { ...workerReq.costs } };
+    
+    // Check if this is a gold-generating worker
+    const isGoldWorker = workerReq.outputs && workerReq.outputs.gold;
+    // Check if this is a food-generating worker
+    const isFoodWorker = workerReq.outputs && workerReq.outputs.food;
+    
+    if (isGoldWorker) {
+      const level = player.upgrades.EFFICIENT_MINING || 0;
+      if (level > 0) {
+        const reduction = this._getUpgradeEffect(UPGRADE_TYPES.EFFICIENT_MINING, level, 'goldWorkerCostReduction', 1);
+        modifiedReq.costs.gold = Math.ceil(modifiedReq.costs.gold * reduction);
+      }
+    }
+    
+    if (isFoodWorker) {
+      const level = player.upgrades.EFFICIENT_FARMING || 0;
+      if (level > 0) {
+        const reduction = this._getUpgradeEffect(UPGRADE_TYPES.EFFICIENT_FARMING, level, 'foodWorkerCostReduction', 1);
+        modifiedReq.costs.gold = Math.ceil(modifiedReq.costs.gold * reduction);
+      }
+    }
+    
+    return modifiedReq;
+  }
+
+  _getModifiedUnitCost(unitReq, player) {
+    if (!player?.upgrades) return unitReq;
+    
+    const level = player.upgrades.RECRUITMENT_EFFICIENCY || 0;
+    if (level === 0) return unitReq;
+    
+    const reduction = this._getUpgradeEffect(UPGRADE_TYPES.RECRUITMENT_EFFICIENCY, level, 'unitCostReduction', 1);
+    
+    const modifiedReq = { ...unitReq, costs: { ...unitReq.costs } };
+    for (const [resource, cost] of Object.entries(modifiedReq.costs)) {
+      modifiedReq.costs[resource] = Math.ceil(cost * reduction);
+    }
+    
+    return modifiedReq;
+  }
+
+  _getModifiedUnitStats(unitReq, player) {
+    if (!player?.upgrades) return unitReq;
+    
+    let hp = unitReq.hp;
+    let dmg = unitReq.dmg;
+    
+    // Apply health multiplier
+    const armorLevel = player.upgrades.UNIT_ARMOR || 0;
+    if (armorLevel > 0) {
+      const multiplier = this._getUpgradeEffect(UPGRADE_TYPES.UNIT_ARMOR, armorLevel, 'unitHealthMultiplier', 1);
+      hp = Math.ceil(hp * multiplier);
+    }
+    
+    // Apply damage multiplier
+    const weaponLevel = player.upgrades.WEAPON_ENHANCEMENT || 0;
+    if (weaponLevel > 0) {
+      const multiplier = this._getUpgradeEffect(UPGRADE_TYPES.WEAPON_ENHANCEMENT, weaponLevel, 'unitDamageMultiplier', 1);
+      dmg = Math.ceil(dmg * multiplier);
+    }
+    
+    return { ...unitReq, hp, dmg };
+  }
+
+  purchaseUpgrade(socket, upgradeId) {
+    const name = this.socketToName.get(socket.id);
+    if (!this.gameState?.isPlayerAlive(name)) return;
+    
+    const player = this._getPlayer(socket);
+    if (!player) return;
+    
+    const upgradeType = UPGRADE_TYPES[upgradeId];
+    if (!upgradeType) return;
+    
+    const currentLevel = player.upgrades[upgradeId] || 0;
+    const nextLevel = currentLevel + 1;
+    
+    // Check if upgrade level exists
+    const levelData = upgradeType.levels.find(l => l.level === nextLevel);
+    if (!levelData) return; // Already at max level
+    
+    // Check if player can afford upgrade
+    const costs = levelData.cost;
+    for (const [res, amt] of Object.entries(costs)) {
+      if ((player[res] || 0) < amt) return; // insufficient resources
+    }
+    
+    // Deduct resources
+    for (const [res, amt] of Object.entries(costs)) {
+      player[res] = (player[res] || 0) - amt;
+    }
+    
+    // Apply upgrade
+    player.upgrades[upgradeId] = nextLevel;
+    
+    // Handle castle fortification upgrade immediately
+    if (upgradeId === 'CASTLE_FORTIFICATION') {
+      const hpIncrease = levelData.effect.castleMaxHpIncrease;
+      this.gameState.castleHealth[name] += hpIncrease;
+    }
+    
+    // Emit updates
+    this._emitResourceUpdate(socket, player);
+    socket.emit(EVENTS.UPGRADE_UPDATE, { upgrades: player.upgrades });
+    
+    // Broadcast castle HP changes if applicable
+    if (upgradeId === 'CASTLE_FORTIFICATION') {
+      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
+        castleHp: this.gameState.castleHealth
+      });
+    }
   }
 }

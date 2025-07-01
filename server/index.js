@@ -131,6 +131,16 @@ io.on(EVENTS.CONNECTION, socket => {
     }
   });
 
+  // ADD: Handle purchase upgrade from client
+  socket.on(EVENTS.PURCHASE_UPGRADE, (upgradeId) => {
+    const roomId = roomManager.socketToRoom.get(socket.id);
+    if (!roomId) return;
+    const service = roomManager.rooms.get(roomId);
+    if (service && typeof service.purchaseUpgrade === 'function') {
+      service.purchaseUpgrade(socket, upgradeId);
+    }
+  });
+
   socket.on('disconnect', () => {
     const roomId = roomManager.socketToRoom.get(socket.id);
     if (!roomId) return;

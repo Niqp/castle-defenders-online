@@ -175,10 +175,37 @@ export default function WorkerCard({
   onHire, 
   canAfford, 
   disabled,
-  workerConfig 
-}) {
+  workerConfig,
+  upgrades = {},
+  upgradeTypes = {}
+  }) {
   const animationContext = useContext(WorkerAnimationContext);
   
+  /* --------------------------
+   * Helper functions for upgrade effects
+   * -------------------------- */
+  const getUpgradeEffect = (upgradeType, level, effectKey, defaultValue) => {
+    if (!upgradeType || level === 0) return defaultValue;
+    const levelData = upgradeType.levels?.find(l => l.level === level);
+    return levelData?.effect[effectKey] ?? defaultValue;
+  };
+
+  const getUpgradedProduction = (baseOutputs) => {
+    if (!baseOutputs || !upgrades || !upgradeTypes) return baseOutputs;
+    
+    const productivityLevel = upgrades.WORKER_PRODUCTIVITY || 0;
+    if (productivityLevel === 0) return baseOutputs;
+    
+    const multiplier = getUpgradeEffect(upgradeTypes.WORKER_PRODUCTIVITY, productivityLevel, 'workerMultiplier', 1);
+    
+    const upgradedOutputs = {};
+    Object.entries(baseOutputs).forEach(([resource, amount]) => {
+      upgradedOutputs[resource] = Math.floor(amount * multiplier);
+    });
+    
+    return upgradedOutputs;
+  };
+
   /* --------------------------
    * Cached sprite assets
    * -------------------------- */
@@ -230,7 +257,7 @@ export default function WorkerCard({
     const updateSize = () => {
       if (!cardRef.current) return;
       const rect = cardRef.current.getBoundingClientRect();
-      setCanvasSize({ w: rect.width, h: rect.height - 32 });
+      setCanvasSize({ w: rect.width, h: rect.height - 48 }); // Increased from 32 to 48 for two-line bottom bar
     };
 
     updateSize();
@@ -303,7 +330,7 @@ export default function WorkerCard({
       className={`worker-card relative overflow-hidden rounded-lg bg-gradient-to-r from-base-300 to-base-400 border-2 border-base-200 shadow-lg ${
         hireDisabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
       }`}
-      style={{ height: 110 }}
+      style={{ height: 125 }}
       onClick={handleClick}
     >
       <canvas
@@ -314,25 +341,87 @@ export default function WorkerCard({
         style={{ touchAction: 'pan-y' }}
       />
 
-      {/* Bottom bar */}
-      <div className="absolute bottom-0 inset-x-0 bg-black/90 text-white text-xs px-2 py-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 truncate">
-          <img src={workerSprite} alt="w" className="w-5 h-5" />
-          <span className="font-semibold truncate max-w-[6rem]">{worker.type}</span>
-          <span className="badge badge-accent badge-xs">x{worker.current}</span>
-          <span className="hidden sm:inline opacity-70 ml-1">
-            {Object.entries(worker.cost)
-              .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
-              .join('/')}
-          </span>
+      {/* Bottom bar with detailed info */}
+      <div className="absolute bottom-0 inset-x-0 bg-black/90 text-white text-xs px-2 py-2">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-1">
+            <img src={workerSprite} alt="w" className="w-5 h-5" />
+            <span className="font-semibold">{worker.type}</span>
+            <span className="badge badge-accent badge-xs">x{worker.current}</span>
+          </div>
+          <button
+            className="btn btn-secondary btn-xs"
+            disabled={hireDisabled}
+            onClick={onHire}
+          >
+            Hire
+          </button>
         </div>
-        <button
-          className="btn btn-secondary btn-xs"
-          disabled={hireDisabled}
-          onClick={onHire}
-        >
-          Hire
-        </button>
+        
+        {/* Cost information */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <span className="opacity-70">Cost:</span>
+            {/* Check if costs are different to show upgrade pricing */}
+            {worker.originalCost && JSON.stringify(worker.cost) !== JSON.stringify(worker.originalCost) ? (
+              <>
+                <span className="text-green-400 font-medium">
+                  {Object.entries(worker.cost)
+                    .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                    .join(' / ')}
+                </span>
+                <span className="line-through opacity-50 text-xs">
+                  {Object.entries(worker.originalCost)
+                    .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                    .join(' / ')}
+                </span>
+              </>
+            ) : (
+              <span className="font-medium">
+                {Object.entries(worker.cost)
+                  .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                  .join(' / ')}
+              </span>
+            )}
+          </div>
+          
+          {/* Production info */}
+          {workerConfig?.outputs && (
+            <div className="flex items-center gap-1">
+              {(() => {
+                const baseOutputs = workerConfig.outputs;
+                const upgradedOutputs = getUpgradedProduction(baseOutputs);
+                const hasUpgrades = JSON.stringify(baseOutputs) !== JSON.stringify(upgradedOutputs);
+                
+                return (
+                  <div className="flex items-center gap-1">
+                    <span className="opacity-70 text-xs">Produces:</span>
+                    {hasUpgrades ? (
+                      <>
+                        <span className="text-blue-400 font-medium text-xs">
+                          +{Object.entries(upgradedOutputs)
+                            .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                            .join('/')}/s
+                        </span>
+                        <span className="line-through opacity-50 text-xs">
+                          +{Object.entries(baseOutputs)
+                            .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                            .join('/')}/s
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-medium text-xs">
+                        +{Object.entries(baseOutputs)
+                          .map(([r, v]) => `${v}${r[0].toUpperCase()}`)
+                          .join('/')}/s
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

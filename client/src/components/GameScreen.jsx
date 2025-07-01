@@ -37,6 +37,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const [food, setFood] = useState(gameState?.food ?? 0);
   const [workers, setWorkers] = useState(gameState?.workers ?? { Miner: 0, Digger: 0, Excavator: 0 });
   const [playerUnits, setPlayerUnits] = useState(gameState?.playerUnits ?? { Swordsman: 0, Archer: 0, Knight: 0 });
+  const [upgrades, setUpgrades] = useState(gameState?.upgrades ?? {});
   const [enemies, setEnemies] = useState(gameState?.enemies ?? []);
   const [units, setUnits] = useState(gameState?.units ?? []); // Assuming units are player-controlled units on the map
   const [wave, setWave] = useState(gameState?.wave ?? 1);
@@ -76,6 +77,9 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     socket.on('unitUpdate', (data) => {
       if (data && data.units) setPlayerUnits(prev => ({...prev, ...data.units}));
     });
+    socket.on('upgradeUpdate', (data) => {
+      if (data && data.upgrades) setUpgrades(prev => ({...prev, ...data.upgrades}));
+    });
     socket.on('stateUpdate', (data) => {
       if (data.wave !== undefined) setWave(data.wave);
       if (data.nextWaveIn !== undefined) {
@@ -110,6 +114,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     return () => {
       socket.off('resourceUpdate');
       socket.off('unitUpdate');
+      socket.off('upgradeUpdate');
       socket.off('stateUpdate');
       socket.off('spawnEnemies');
       socket.off('spawnUnits');
@@ -122,6 +127,10 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   function handleSpawnUnit(type) {
     socketRef.current?.emit('spawnUnit', type, selectedCol);
   }
+  function handlePurchaseUpgrade(upgradeId) {
+    socketRef.current?.emit('purchaseUpgrade', upgradeId);
+  }
+
   const mineButtonRef = useRef(null);
 
   const spawnGoldChips = (amount = 1) => {
@@ -196,23 +205,125 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const gridReady = useMemo(() => Array.isArray(grid) && grid.length && Array.isArray(grid[0]), [grid]);
   const stageReady = gridReady && pixiContainerRef.current !== null;
 
+  // Calculate resource per tick based on workers
+  const calculateResourcePerTick = (workerCounts, workerTypes) => {
+    const resourcePerTick = { gold: 0, food: 0 };
+    
+    if (!workerTypes || !workerCounts) return resourcePerTick;
+    
+    Object.entries(workerTypes).forEach(([type, config]) => {
+      const count = workerCounts[type] || 0;
+      if (count > 0 && config.outputs) {
+        Object.entries(config.outputs).forEach(([resource, amount]) => {
+          resourcePerTick[resource] = (resourcePerTick[resource] || 0) + (count * amount);
+        });
+      }
+    });
+    
+    return resourcePerTick;
+  };
+
+  // Calculate current player's resource per tick
+  const currentPlayerResourcePerTick = useMemo(() => {
+    return calculateResourcePerTick(workers, gameState?.workerTypes);
+  }, [workers, gameState?.workerTypes]);
+
+  // Helper functions for upgrade effects
+  const getUpgradeEffect = (upgradeType, level, effectKey, defaultValue) => {
+    if (!upgradeType || level === 0) return defaultValue;
+    const levelData = upgradeType.levels?.find(l => l.level === level);
+    return levelData?.effect[effectKey] ?? defaultValue;
+  };
+
+  const getModifiedWorkerCost = (workerReq, upgrades, upgradeTypes) => {
+    if (!upgrades || !upgradeTypes) return workerReq.costs;
+    
+    const modifiedCosts = { ...workerReq.costs };
+    
+    // Check if this is a gold-generating worker
+    const isGoldWorker = workerReq.outputs && workerReq.outputs.gold;
+    // Check if this is a food-generating worker
+    const isFoodWorker = workerReq.outputs && workerReq.outputs.food;
+    
+    if (isGoldWorker) {
+      const level = upgrades.EFFICIENT_MINING || 0;
+      if (level > 0) {
+        const reduction = getUpgradeEffect(upgradeTypes.EFFICIENT_MINING, level, 'goldWorkerCostReduction', 1);
+        modifiedCosts.gold = Math.ceil(modifiedCosts.gold * reduction);
+      }
+    }
+    
+    if (isFoodWorker) {
+      const level = upgrades.EFFICIENT_FARMING || 0;
+      if (level > 0) {
+        const reduction = getUpgradeEffect(upgradeTypes.EFFICIENT_FARMING, level, 'foodWorkerCostReduction', 1);
+        modifiedCosts.gold = Math.ceil(modifiedCosts.gold * reduction);
+      }
+    }
+    
+    return modifiedCosts;
+  };
+
+  const getModifiedUnitCost = (unitReq, upgrades, upgradeTypes) => {
+    if (!upgrades || !upgradeTypes) return unitReq.costs;
+    
+    const level = upgrades.RECRUITMENT_EFFICIENCY || 0;
+    if (level === 0) return unitReq.costs;
+    
+    const reduction = getUpgradeEffect(upgradeTypes.RECRUITMENT_EFFICIENCY, level, 'unitCostReduction', 1);
+    
+    const modifiedCosts = { ...unitReq.costs };
+    for (const [resource, cost] of Object.entries(modifiedCosts)) {
+      modifiedCosts[resource] = Math.ceil(cost * reduction);
+    }
+    
+    return modifiedCosts;
+  };
+
+  const getModifiedUnitStats = (unitReq, upgrades, upgradeTypes) => {
+    if (!upgrades || !upgradeTypes) return { hp: unitReq.hp, dmg: unitReq.dmg };
+    
+    let hp = unitReq.hp;
+    let dmg = unitReq.dmg;
+    
+    // Apply health multiplier
+    const armorLevel = upgrades.UNIT_ARMOR || 0;
+    if (armorLevel > 0) {
+      const multiplier = getUpgradeEffect(upgradeTypes.UNIT_ARMOR, armorLevel, 'unitHealthMultiplier', 1);
+      hp = Math.ceil(hp * multiplier);
+    }
+    
+    // Apply damage multiplier
+    const weaponLevel = upgrades.WEAPON_ENHANCEMENT || 0;
+    if (weaponLevel > 0) {
+      const multiplier = getUpgradeEffect(upgradeTypes.WEAPON_ENHANCEMENT, weaponLevel, 'unitDamageMultiplier', 1);
+      dmg = Math.ceil(dmg * multiplier);
+    }
+    
+    return { hp, dmg };
+  };
+
   // Dynamically build worker type list based on server-provided config (fallback to legacy list)
   const workerTypes = useMemo(() => {
     if (gameState?.workerTypes) {
-      return Object.entries(gameState.workerTypes).map(([type, cfg]) => ({
-        type,
-        cost: cfg.costs ?? { gold: cfg.cost ?? 0 },
-        current: workers[type] ?? 0,
-        sprite: cfg.sprite ?? null,
-      }));
+      return Object.entries(gameState.workerTypes).map(([type, cfg]) => {
+        const modifiedCost = getModifiedWorkerCost(cfg, upgrades, gameState?.upgradeTypes);
+        return {
+          type,
+          cost: modifiedCost,
+          originalCost: cfg.costs ?? { gold: cfg.cost ?? 0 },
+          current: workers[type] ?? 0,
+          sprite: cfg.sprite ?? null,
+        };
+      });
     }
     // Fallback if server did not send workerTypes
     return [
-      { type: 'Miner', cost: { gold: 50 }, current: workers.Miner, sprite: 'miner.png' },
-      { type: 'Digger', cost: { gold: 200 }, current: workers.Digger, sprite: 'digger.png' },
-      { type: 'Excavator', cost: { gold: 500 }, current: workers.Excavator, sprite: 'excavator.png' },
+      { type: 'Miner', cost: { gold: 50 }, originalCost: { gold: 50 }, current: workers.Miner, sprite: 'miner.png' },
+      { type: 'Digger', cost: { gold: 200 }, originalCost: { gold: 200 }, current: workers.Digger, sprite: 'digger.png' },
+      { type: 'Excavator', cost: { gold: 500 }, originalCost: { gold: 500 }, current: workers.Excavator, sprite: 'excavator.png' },
     ];
-  }, [gameState?.workerTypes, workers]);
+  }, [gameState?.workerTypes, gameState?.upgradeTypes, workers, upgrades]);
 
   /* --------------------------
    * Row selection state   
@@ -287,19 +398,28 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       aliveUnitCounts[type] !== undefined ? aliveUnitCounts[type] : 0
     );
     if (gameState?.unitTypes) {
-      return Object.entries(gameState.unitTypes).map(([type, cfg]) => ({
-        type,
-        cost: cfg.costs ?? { gold: cfg.gold ?? 0, food: cfg.food ?? 0 },
-        current: getCurrent(type),
-        sprite: cfg.sprite ?? null,
-      }));
+      return Object.entries(gameState.unitTypes).map(([type, cfg]) => {
+        const modifiedCost = getModifiedUnitCost(cfg, upgrades, gameState?.upgradeTypes);
+        const modifiedStats = getModifiedUnitStats(cfg, upgrades, gameState?.upgradeTypes);
+        return {
+          type,
+          cost: modifiedCost,
+          originalCost: cfg.costs ?? { gold: cfg.gold ?? 0, food: cfg.food ?? 0 },
+          current: getCurrent(type),
+          sprite: cfg.sprite ?? null,
+          hp: modifiedStats.hp,
+          dmg: modifiedStats.dmg,
+          originalHp: cfg.hp,
+          originalDmg: cfg.dmg,
+        };
+      });
     }
     return [
-      { type: 'Swordsman', cost: { gold: 100, food: 10 }, current: getCurrent('Swordsman'), sprite: 'swordsman.png' },
-      { type: 'Archer', cost: { gold: 150, food: 15 }, current: getCurrent('Archer'), sprite: 'archer.png' },
-      { type: 'Knight', cost: { gold: 300, food: 30 }, current: getCurrent('Knight'), sprite: 'knight.png' },
+      { type: 'Swordsman', cost: { gold: 100, food: 10 }, originalCost: { gold: 100, food: 10 }, current: getCurrent('Swordsman'), sprite: 'swordsman.png', hp: 50, dmg: 5, originalHp: 50, originalDmg: 5 },
+      { type: 'Archer', cost: { gold: 150, food: 15 }, originalCost: { gold: 150, food: 15 }, current: getCurrent('Archer'), sprite: 'archer.png', hp: 18, dmg: 4, originalHp: 18, originalDmg: 4 },
+      { type: 'Knight', cost: { gold: 300, food: 30 }, originalCost: { gold: 300, food: 30 }, current: getCurrent('Knight'), sprite: 'knight.png', hp: 50, dmg: 10, originalHp: 50, originalDmg: 10 },
     ];
-  }, [gameState?.unitTypes, playerUnits, aliveUnitCounts]);
+  }, [gameState?.unitTypes, gameState?.upgradeTypes, playerUnits, aliveUnitCounts, upgrades]);
 
   const canAfford = (cost) => {
     return Object.entries(cost).every(([res, val]) => {
@@ -308,29 +428,6 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
       return true; // Unknown resources assumed unlimited for now
     });
   };
-
-  // Calculate resource per tick based on workers
-  const calculateResourcePerTick = (workerCounts, workerTypes) => {
-    const resourcePerTick = { gold: 0, food: 0 };
-    
-    if (!workerTypes || !workerCounts) return resourcePerTick;
-    
-    Object.entries(workerTypes).forEach(([type, config]) => {
-      const count = workerCounts[type] || 0;
-      if (count > 0 && config.outputs) {
-        Object.entries(config.outputs).forEach(([resource, amount]) => {
-          resourcePerTick[resource] = (resourcePerTick[resource] || 0) + (count * amount);
-        });
-      }
-    });
-    
-    return resourcePerTick;
-  };
-
-  // Calculate current player's resource per tick
-  const currentPlayerResourcePerTick = useMemo(() => {
-    return calculateResourcePerTick(workers, gameState?.workerTypes);
-  }, [workers, gameState?.workerTypes]);
 
   return (
     <div data-theme="fantasy" className="min-h-dvh w-full flex flex-col bg-base-300 text-base-content relative">
@@ -555,6 +652,8 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                             onHire={() => handleHireWorker(worker.type)}
                             canAfford={canAfford(worker.cost)}
                             disabled={!playerAlive}
+                            upgrades={upgrades}
+                            upgradeTypes={gameState?.upgradeTypes}
                           />
                         ))}
                       </div>
@@ -570,21 +669,52 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                 <div className="card-body p-3 sm:p-4">
                   <h3 className="card-title text-md sm:text-lg">Military Units</h3>
                   <div className="space-y-2 mt-2">
-                    {unitTypes.map(unit => (
-                      <div key={unit.type} className="flex items-center justify-between p-2 bg-base-400 rounded-md">
-                        <div>
-                          <p className="font-semibold text-sm sm:text-base flex items-center">{SPRITE_MAP[unit.sprite] && <img src={SPRITE_MAP[unit.sprite]} alt={unit.type} className="w-5 h-5 mr-1" />} {unit.type} <span className="badge badge-neutral badge-sm ml-1">x{unit.current}</span></p>
-                          <p className="text-xs text-base-content/70">Cost: {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}</p>
+                    {unitTypes.map(unit => {
+                      const hasUpgrades = unit.cost !== unit.originalCost || unit.hp !== unit.originalHp || unit.dmg !== unit.originalDmg;
+                      return (
+                        <div key={unit.type} className="flex items-center justify-between p-3 bg-base-400 rounded-md">
+                          <div className="flex-1">
+                            <div className="flex items-center mb-1">
+                              {SPRITE_MAP[unit.sprite] && <img src={SPRITE_MAP[unit.sprite]} alt={unit.type} className="w-5 h-5 mr-2" />}
+                              <p className="font-semibold text-sm sm:text-base">{unit.type}</p>
+                              <span className="badge badge-neutral badge-sm ml-2">x{unit.current}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-base-content/70">Cost: </span>
+                                <span className={hasUpgrades ? 'text-green-400' : ''}>
+                                  {Object.entries(unit.cost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                </span>
+                                {hasUpgrades && (
+                                  <span className="text-base-content/50 line-through ml-1">
+                                    {Object.entries(unit.originalCost).map(([res,val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                <span className="text-base-content/70">HP: </span>
+                                <span className={unit.hp !== unit.originalHp ? 'text-blue-400' : ''}>{unit.hp}</span>
+                                {unit.hp !== unit.originalHp && (
+                                  <span className="text-base-content/50 line-through ml-1">{unit.originalHp}</span>
+                                )}
+                                <span className="text-base-content/70 ml-2">DMG: </span>
+                                <span className={unit.dmg !== unit.originalDmg ? 'text-red-400' : ''}>{unit.dmg}</span>
+                                {unit.dmg !== unit.originalDmg && (
+                                  <span className="text-base-content/50 line-through ml-1">{unit.originalDmg}</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <button 
+                            className="btn btn-accent btn-sm ml-2" 
+                            onClick={() => handleSpawnUnit(unit.type)}
+                            disabled={!playerAlive || !canAfford(unit.cost)}
+                          >
+                            Spawn
+                          </button>
                         </div>
-                        <button 
-                          className="btn btn-accent btn-sm" 
-                          onClick={() => handleSpawnUnit(unit.type)}
-                          disabled={!playerAlive || !canAfford(unit.cost)}
-                        >
-                          Spawn
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   {rows > 1 && (
                     <div className="form-control mt-4">
@@ -683,15 +813,253 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
 
             {/* Upgrades Tab */}
             {activeTab === 'upgrades' && (
-              <div className="card bg-base-300 shadow-md compact">
-                <div className="card-body p-3 sm:p-4">
-                  <h3 className="card-title text-md sm:text-lg">Upgrades</h3>
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-base-content/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    <p className="text-base-content/70 text-sm">Upgrades coming soon!</p>
-                    <p className="text-base-content/50 text-xs mt-1">This feature is reserved for future development.</p>
+              <div className="space-y-4">
+                {/* Mining Upgrades */}
+                <div className="card bg-base-300 shadow-md compact">
+                  <div className="card-body p-3 sm:p-4">
+                    <h3 className="card-title text-md sm:text-lg flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-yellow-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm2 2a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm-2 5a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd" />
+                      </svg>
+                      Mining
+                    </h3>
+                    <div className="space-y-2 mt-2">
+                      {gameState?.upgradeTypes && Object.entries(gameState.upgradeTypes)
+                        .filter(([_, upgrade]) => upgrade.category === 'mining')
+                        .map(([upgradeId, upgrade]) => {
+                          const currentLevel = upgrades[upgradeId] || 0;
+                          const nextLevel = currentLevel + 1;
+                          const levelData = upgrade.levels.find(l => l.level === nextLevel);
+                          const isMaxLevel = !levelData;
+                          const canAffordUpgrade = levelData && canAfford(levelData.cost);
+
+                          return (
+                            <div key={upgradeId} className="p-3 bg-base-200 rounded-lg">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-sm">{upgrade.name}</h4>
+                                  <p className="text-xs text-base-content/70">{upgrade.description}</p>
+                                  <div className="flex items-center mt-1">
+                                    <span className="text-xs text-base-content/60">Level:</span>
+                                    <div className="ml-2 flex space-x-1">
+                                      {Array.from({ length: upgrade.levels.length }).map((_, i) => (
+                                        <div key={i} className={`w-2 h-2 rounded-full ${i < currentLevel ? 'bg-primary' : 'bg-base-content/20'}`} />
+                                      ))}
+                                    </div>
+                                    <span className="ml-2 text-xs font-medium">{currentLevel}/{upgrade.levels.length}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  {!isMaxLevel && (
+                                    <>
+                                      <div className="text-xs text-base-content/70 mb-1">
+                                        Cost: {Object.entries(levelData.cost).map(([res, val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                      </div>
+                                      <button 
+                                        className="btn btn-primary btn-xs" 
+                                        onClick={() => handlePurchaseUpgrade(upgradeId)}
+                                        disabled={!playerAlive || !canAffordUpgrade}
+                                      >
+                                        Upgrade
+                                      </button>
+                                    </>
+                                  )}
+                                  {isMaxLevel && (
+                                    <span className="text-xs text-success font-medium">MAX</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Worker Upgrades */}
+                <div className="card bg-base-300 shadow-md compact">
+                  <div className="card-body p-3 sm:p-4">
+                    <h3 className="card-title text-md sm:text-lg flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Workers
+                    </h3>
+                    <div className="space-y-2 mt-2">
+                      {gameState?.upgradeTypes && Object.entries(gameState.upgradeTypes)
+                        .filter(([_, upgrade]) => upgrade.category === 'workers')
+                        .map(([upgradeId, upgrade]) => {
+                          const currentLevel = upgrades[upgradeId] || 0;
+                          const nextLevel = currentLevel + 1;
+                          const levelData = upgrade.levels.find(l => l.level === nextLevel);
+                          const isMaxLevel = !levelData;
+                          const canAffordUpgrade = levelData && canAfford(levelData.cost);
+
+                          return (
+                            <div key={upgradeId} className="p-3 bg-base-200 rounded-lg">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-sm">{upgrade.name}</h4>
+                                  <p className="text-xs text-base-content/70">{upgrade.description}</p>
+                                  <div className="flex items-center mt-1">
+                                    <span className="text-xs text-base-content/60">Level:</span>
+                                    <div className="ml-2 flex space-x-1">
+                                      {Array.from({ length: upgrade.levels.length }).map((_, i) => (
+                                        <div key={i} className={`w-2 h-2 rounded-full ${i < currentLevel ? 'bg-primary' : 'bg-base-content/20'}`} />
+                                      ))}
+                                    </div>
+                                    <span className="ml-2 text-xs font-medium">{currentLevel}/{upgrade.levels.length}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  {!isMaxLevel && (
+                                    <>
+                                      <div className="text-xs text-base-content/70 mb-1">
+                                        Cost: {Object.entries(levelData.cost).map(([res, val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                      </div>
+                                      <button 
+                                        className="btn btn-primary btn-xs" 
+                                        onClick={() => handlePurchaseUpgrade(upgradeId)}
+                                        disabled={!playerAlive || !canAffordUpgrade}
+                                      >
+                                        Upgrade
+                                      </button>
+                                    </>
+                                  )}
+                                  {isMaxLevel && (
+                                    <span className="text-xs text-success font-medium">MAX</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Military Upgrades */}
+                <div className="card bg-base-300 shadow-md compact">
+                  <div className="card-body p-3 sm:p-4">
+                    <h3 className="card-title text-md sm:text-lg flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      Military
+                    </h3>
+                    <div className="space-y-2 mt-2">
+                      {gameState?.upgradeTypes && Object.entries(gameState.upgradeTypes)
+                        .filter(([_, upgrade]) => upgrade.category === 'military')
+                        .map(([upgradeId, upgrade]) => {
+                          const currentLevel = upgrades[upgradeId] || 0;
+                          const nextLevel = currentLevel + 1;
+                          const levelData = upgrade.levels.find(l => l.level === nextLevel);
+                          const isMaxLevel = !levelData;
+                          const canAffordUpgrade = levelData && canAfford(levelData.cost);
+
+                          return (
+                            <div key={upgradeId} className="p-3 bg-base-200 rounded-lg">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-sm">{upgrade.name}</h4>
+                                  <p className="text-xs text-base-content/70">{upgrade.description}</p>
+                                  <div className="flex items-center mt-1">
+                                    <span className="text-xs text-base-content/60">Level:</span>
+                                    <div className="ml-2 flex space-x-1">
+                                      {Array.from({ length: upgrade.levels.length }).map((_, i) => (
+                                        <div key={i} className={`w-2 h-2 rounded-full ${i < currentLevel ? 'bg-primary' : 'bg-base-content/20'}`} />
+                                      ))}
+                                    </div>
+                                    <span className="ml-2 text-xs font-medium">{currentLevel}/{upgrade.levels.length}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  {!isMaxLevel && (
+                                    <>
+                                      <div className="text-xs text-base-content/70 mb-1">
+                                        Cost: {Object.entries(levelData.cost).map(([res, val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                      </div>
+                                      <button 
+                                        className="btn btn-primary btn-xs" 
+                                        onClick={() => handlePurchaseUpgrade(upgradeId)}
+                                        disabled={!playerAlive || !canAffordUpgrade}
+                                      >
+                                        Upgrade
+                                      </button>
+                                    </>
+                                  )}
+                                  {isMaxLevel && (
+                                    <span className="text-xs text-success font-medium">MAX</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Castle Upgrades */}
+                <div className="card bg-base-300 shadow-md compact">
+                  <div className="card-body p-3 sm:p-4">
+                    <h3 className="card-title text-md sm:text-lg flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-purple-500" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" />
+                        <path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" />
+                      </svg>
+                      Castle
+                    </h3>
+                    <div className="space-y-2 mt-2">
+                      {gameState?.upgradeTypes && Object.entries(gameState.upgradeTypes)
+                        .filter(([_, upgrade]) => upgrade.category === 'castle')
+                        .map(([upgradeId, upgrade]) => {
+                          const currentLevel = upgrades[upgradeId] || 0;
+                          const nextLevel = currentLevel + 1;
+                          const levelData = upgrade.levels.find(l => l.level === nextLevel);
+                          const isMaxLevel = !levelData;
+                          const canAffordUpgrade = levelData && canAfford(levelData.cost);
+
+                          return (
+                            <div key={upgradeId} className="p-3 bg-base-200 rounded-lg">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h4 className="font-semibold text-sm">{upgrade.name}</h4>
+                                  <p className="text-xs text-base-content/70">{upgrade.description}</p>
+                                  <div className="flex items-center mt-1">
+                                    <span className="text-xs text-base-content/60">Level:</span>
+                                    <div className="ml-2 flex space-x-1">
+                                      {Array.from({ length: upgrade.levels.length }).map((_, i) => (
+                                        <div key={i} className={`w-2 h-2 rounded-full ${i < currentLevel ? 'bg-primary' : 'bg-base-content/20'}`} />
+                                      ))}
+                                    </div>
+                                    <span className="ml-2 text-xs font-medium">{currentLevel}/{upgrade.levels.length}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  {!isMaxLevel && (
+                                    <>
+                                      <div className="text-xs text-base-content/70 mb-1">
+                                        Cost: {Object.entries(levelData.cost).map(([res, val]) => `${val}${res[0].toUpperCase()}`).join(' / ')}
+                                      </div>
+                                      <button 
+                                        className="btn btn-primary btn-xs" 
+                                        onClick={() => handlePurchaseUpgrade(upgradeId)}
+                                        disabled={!playerAlive || !canAffordUpgrade}
+                                      >
+                                        Upgrade
+                                      </button>
+                                    </>
+                                  )}
+                                  {isMaxLevel && (
+                                    <span className="text-xs text-success font-medium">MAX</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 </div>
               </div>

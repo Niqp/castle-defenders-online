@@ -10,6 +10,7 @@ export const EVENTS = {
   MINE: 'mine',
   HIRE_WORKER: 'hireWorker',
   SPAWN_UNIT: 'spawnUnit',
+  PURCHASE_UPGRADE: 'purchaseUpgrade',
 
   RESOURCE_UPDATE: 'resourceUpdate',
   UNIT_UPDATE: 'unitUpdate',
@@ -17,6 +18,7 @@ export const EVENTS = {
   SPAWN_ENEMIES: 'spawnEnemies',
   SPAWN_UNITS: 'spawnUnits',
   STATE_UPDATE: 'stateUpdate',
+  UPGRADE_UPDATE: 'upgradeUpdate',
   GAME_OVER: 'gameOver',
 
   // Client persistence events (should mirror server names)

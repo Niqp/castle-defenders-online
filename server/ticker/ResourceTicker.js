@@ -1,4 +1,4 @@
-import { WORKER_TYPES, TIMINGS } from '../config.js';
+import { WORKER_TYPES, TIMINGS, UPGRADE_TYPES } from '../config.js';
 import { EVENTS } from '../events.js';
 
 export class ResourceTicker {
@@ -57,17 +57,28 @@ export class ResourceTicker {
       try {
         this.players.forEach(p => {
           const incomeMap = {};
+          
+          // Calculate worker income with productivity upgrades
           for (const [type, config] of Object.entries(WORKER_TYPES)) {
             const count = p.workers[type] || 0;
             if (!count) continue;
             const outputs = config.outputs || (config.output !== undefined ? { [config.resource || 'gold']: config.output } : {});
+            
+            // Apply worker productivity upgrade
+            const productivityLevel = p.upgrades?.WORKER_PRODUCTIVITY || 0;
+            const productivityMultiplier = this._getUpgradeEffect(UPGRADE_TYPES.WORKER_PRODUCTIVITY, productivityLevel, 'workerMultiplier', 1);
+            
             for (const [res, amount] of Object.entries(outputs)) {
-              incomeMap[res] = (incomeMap[res] || 0) + count * amount;
+              const finalAmount = Math.floor(amount * productivityMultiplier);
+              incomeMap[res] = (incomeMap[res] || 0) + count * finalAmount;
             }
           }
+          
+          // Apply income to player
           for (const [res, amt] of Object.entries(incomeMap)) {
             p[res] = (p[res] || 0) + amt;
           }
+          
           // Prepare all players' resources for broadcasting
           const allPlayersResources = {};
           this.players.forEach(player => {
@@ -97,7 +108,17 @@ export class ResourceTicker {
   }
 
   stop() {
-    clearInterval(this.intervalId);
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+  }
+
+  // Helper method for upgrade effects
+  _getUpgradeEffect(upgradeType, level, effectKey, defaultValue) {
+    if (level === 0) return defaultValue;
+    const levelData = upgradeType.levels.find(l => l.level === level);
+    return levelData?.effect[effectKey] ?? defaultValue;
   }
 }
 
