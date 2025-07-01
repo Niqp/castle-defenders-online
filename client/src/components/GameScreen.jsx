@@ -100,83 +100,167 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     const socket = socketRef.current;
     if (!socket) return;
 
-    socket.on(EVENTS.RESOURCE_UPDATE, (data) => {
-      if (data) {
-        if (data.gold !== undefined) setGold(data.gold);
-        if (data.food !== undefined) setFood(data.food);
-        if (data.workers) setWorkers(prev => ({...prev, ...data.workers}));
-        // Store all players' resources if provided
-        if (data.allPlayersResources) setAllPlayersResources(data.allPlayersResources);
+    const handleResourceUpdate = (data) => {
+      try {
+        if (data) {
+          if (data.gold !== undefined) setGold(data.gold);
+          if (data.food !== undefined) setFood(data.food);
+          if (data.workers) setWorkers(prev => ({...prev, ...data.workers}));
+          // Store all players' resources if provided
+          if (data.allPlayersResources) setAllPlayersResources(data.allPlayersResources);
+        }
+      } catch (error) {
+        console.error('Error handling resource update:', error);
       }
-    });
-    socket.on(EVENTS.UNIT_UPDATE, (data) => {
-      if (data && data.units) setPlayerUnits(prev => ({...prev, ...data.units}));
-    });
-    socket.on(EVENTS.UPGRADE_UPDATE, (data) => {
-      if (data && data.upgrades) setUpgrades(prev => ({...prev, ...data.upgrades}));
-    });
-    socket.on(EVENTS.AUTO_SPAWN_UPDATE, (data) => {
-      if (data && data.autoSpawn) setAutoSpawn(prev => ({...prev, ...data.autoSpawn}));
-    });
-    socket.on(EVENTS.STATE_UPDATE, (data) => {
-      if (data.wave !== undefined) setWave(data.wave);
-      if (data.nextWaveIn !== undefined) {
-        setNextWaveIn(data.nextWaveIn);
-        lastWaveValueRef.current = data.nextWaveIn; // Ensure animation resets correctly
-        lastWaveUpdateRef.current = Date.now();
+    };
+
+    const handleUnitUpdate = (data) => {
+      try {
+        if (data && data.units) setPlayerUnits(prev => ({...prev, ...data.units}));
+      } catch (error) {
+        console.error('Error handling unit update:', error);
       }
-      if (data.castleHp !== undefined) {
-        setCastleHp(typeof data.castleHp === 'object' ? data.castleHp : { [playerName]: data.castleHp });
+    };
+
+    const handleUpgradeUpdate = (data) => {
+      try {
+        if (data && data.upgrades) setUpgrades(prev => ({...prev, ...data.upgrades}));
+      } catch (error) {
+        console.error('Error handling upgrade update:', error);
       }
-      if (data.grid) setGrid(data.grid);
-      if (data.enemyCountsPerLane) setEnemyCountsPerLane(data.enemyCountsPerLane);
-    });
-    socket.on(EVENTS.SPAWN_ENEMIES, (data) => {
-      if (data && Array.isArray(data.enemies)) {
-        prevEnemiesRef.current = enemies; // For interpolation if PixiStage uses it
-        lastUpdateRef.current = Date.now();
-        setEnemies(data.enemies);
+    };
+
+    const handleAutoSpawnUpdate = (data) => {
+      try {
+        if (data && data.autoSpawn) setAutoSpawn(prev => ({...prev, ...data.autoSpawn}));
+      } catch (error) {
+        console.error('Error handling auto-spawn update:', error);
       }
-    });
-    socket.on(EVENTS.SPAWN_UNITS, (data) => {
-      // Assuming 'units' are player units on the map, distinct from 'playerUnits' (counts)
-      if (data && Array.isArray(data.units)) {
-        // prevUnitsRef.current = units; // If interpolation is needed for these units
-        // lastUpdateRef.current = Date.now();
-        setUnits(data.units);
+    };
+
+    const handleStateUpdate = (data) => {
+      try {
+        if (data.wave !== undefined) setWave(data.wave);
+        if (data.nextWaveIn !== undefined) {
+          setNextWaveIn(data.nextWaveIn);
+          lastWaveValueRef.current = data.nextWaveIn; // Ensure animation resets correctly
+          lastWaveUpdateRef.current = Date.now();
+        }
+        if (data.castleHp !== undefined) {
+          setCastleHp(typeof data.castleHp === 'object' ? data.castleHp : { [playerName]: data.castleHp });
+        }
+        if (data.grid) setGrid(data.grid);
+        if (data.enemyCountsPerLane) setEnemyCountsPerLane(data.enemyCountsPerLane);
+      } catch (error) {
+        console.error('Error handling state update:', error);
       }
-    });
+    };
+
+    const handleSpawnEnemies = (data) => {
+      try {
+        if (data && Array.isArray(data.enemies)) {
+          prevEnemiesRef.current = enemies; // For interpolation if PixiStage uses it
+          lastUpdateRef.current = Date.now();
+          setEnemies(data.enemies);
+        }
+      } catch (error) {
+        console.error('Error handling enemy spawn:', error);
+      }
+    };
+
+    const handleSpawnUnits = (data) => {
+      try {
+        // Assuming 'units' are player units on the map, distinct from 'playerUnits' (counts)
+        if (data && Array.isArray(data.units)) {
+          // prevUnitsRef.current = units; // If interpolation is needed for these units
+          // lastUpdateRef.current = Date.now();
+          setUnits(data.units);
+        }
+      } catch (error) {
+        console.error('Error handling unit spawn:', error);
+      }
+    };
+
+    socket.on(EVENTS.RESOURCE_UPDATE, handleResourceUpdate);
+    socket.on(EVENTS.UNIT_UPDATE, handleUnitUpdate);
+    socket.on(EVENTS.UPGRADE_UPDATE, handleUpgradeUpdate);
+    socket.on(EVENTS.AUTO_SPAWN_UPDATE, handleAutoSpawnUpdate);
+    socket.on(EVENTS.STATE_UPDATE, handleStateUpdate);
+    socket.on(EVENTS.SPAWN_ENEMIES, handleSpawnEnemies);
+    socket.on(EVENTS.SPAWN_UNITS, handleSpawnUnits);
 
     // Initial fetch of full state if needed, or rely on gameState prop
     // socket.emit('requestInitialGameState'); // Example: if you need to fetch fresh state
 
     return () => {
-      socket.off(EVENTS.RESOURCE_UPDATE);
-      socket.off(EVENTS.UNIT_UPDATE);
-      socket.off(EVENTS.UPGRADE_UPDATE);
-      socket.off(EVENTS.AUTO_SPAWN_UPDATE);
-      socket.off(EVENTS.STATE_UPDATE);
-      socket.off(EVENTS.SPAWN_ENEMIES);
-      socket.off(EVENTS.SPAWN_UNITS);
+      socket.off(EVENTS.RESOURCE_UPDATE, handleResourceUpdate);
+      socket.off(EVENTS.UNIT_UPDATE, handleUnitUpdate);
+      socket.off(EVENTS.UPGRADE_UPDATE, handleUpgradeUpdate);
+      socket.off(EVENTS.AUTO_SPAWN_UPDATE, handleAutoSpawnUpdate);
+      socket.off(EVENTS.STATE_UPDATE, handleStateUpdate);
+      socket.off(EVENTS.SPAWN_ENEMIES, handleSpawnEnemies);
+      socket.off(EVENTS.SPAWN_UNITS, handleSpawnUnits);
     };
   }, [socketRef]); // Fix #4: Only depend on socketRef to prevent listener churn
 
   function handleHireWorker(type) {
-    socketRef.current?.emit(EVENTS.HIRE_WORKER, type);
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(EVENTS.HIRE_WORKER, type);
+      } else {
+        console.error('Socket not connected');
+      }
+    } catch (error) {
+      console.error('Error hiring worker:', error);
+    }
   }
+  
   function handleSpawnUnit(type) {
-    socketRef.current?.emit(EVENTS.SPAWN_UNIT, type, selectedCol);
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(EVENTS.SPAWN_UNIT, type, selectedCol);
+      } else {
+        console.error('Socket not connected');
+      }
+    } catch (error) {
+      console.error('Error spawning unit:', error);
+    }
   }
+  
   function handlePurchaseUpgrade(upgradeId) {
-    socketRef.current?.emit(EVENTS.PURCHASE_UPGRADE, upgradeId);
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(EVENTS.PURCHASE_UPGRADE, upgradeId);
+      } else {
+        console.error('Socket not connected');
+      }
+    } catch (error) {
+      console.error('Error purchasing upgrade:', error);
+    }
   }
   
   function handleToggleAutoSpawn(unitType) {
-    socketRef.current?.emit(EVENTS.TOGGLE_AUTO_SPAWN, unitType);
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(EVENTS.TOGGLE_AUTO_SPAWN, unitType);
+      } else {
+        console.error('Socket not connected');
+      }
+    } catch (error) {
+      console.error('Error toggling auto-spawn:', error);
+    }
   }
   
   function handleSetAutoSpawnAmount(unitType, amount) {
-    socketRef.current?.emit(EVENTS.SET_AUTO_SPAWN_AMOUNT, unitType, amount);
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(EVENTS.SET_AUTO_SPAWN_AMOUNT, unitType, amount);
+      } else {
+        console.error('Socket not connected');
+      }
+    } catch (error) {
+      console.error('Error setting auto-spawn amount:', error);
+    }
   }
 
   const mineButtonRef = useRef(null);
@@ -226,7 +310,15 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   };
 
   const handleMine = () => {
-    socketRef.current?.emit(EVENTS.MINE);
+    try {
+      if (socketRef.current?.connected) {
+        socketRef.current.emit(EVENTS.MINE);
+      } else {
+        console.error('Socket not connected');
+      }
+    } catch (error) {
+      console.error('Error mining:', error);
+    }
   };
 
   const [animatedWaveIn, setAnimatedWaveIn] = useState(nextWaveIn);

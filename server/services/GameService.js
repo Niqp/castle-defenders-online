@@ -61,67 +61,75 @@ export class GameService {
   }
 
   join(socket, name) {
-    this.socketToName.set(socket.id, name);
+    try {
+      this.socketToName.set(socket.id, name);
 
-    // -----------------------------------------------------
-    // 1) Game already in progress ⇒ join immediately
-    // -----------------------------------------------------
-    if (this.gameState) {
-      // a) Extend GameState with new player/column
-      const col = this.gameState.addPlayer(name, GAME_BALANCE.INITIAL_CASTLE_HP);
-      if (col < 0) {
-        // Player already present – just sync state
+      // -----------------------------------------------------
+      // 1) Game already in progress ⇒ join immediately
+      // -----------------------------------------------------
+      if (this.gameState) {
+        // a) Extend GameState with new player/column
+        const col = this.gameState.addPlayer(name, GAME_BALANCE.INITIAL_CASTLE_HP);
+        if (col < 0) {
+          // Player already present – just sync state
+          this.syncState(socket, name);
+          return;
+        }
+
+        // b) Initialise per-player resource tracking object
+        const newPlayerObj = {
+          name,
+          gold: 0,
+          food: 0,
+          iron: 0,
+          jewels: 0,
+          workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
+          units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
+          upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0])),
+          autoSpawn: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]))
+        };
+        this.gameState.players.push(newPlayerObj);
+
+        // c) Make sure future resource ticks include this player (array ref shared)
+        //    -> already handled because ResourceTicker keeps reference to players array
+
+        // d) Broadcast updated battlefield so existing players see new lane
+        this.safeEmitToRoom(EVENTS.STATE_UPDATE, {
+          castleHp: this.gameState.castleHealth,
+          grid: this.gameState.grid.cells,
+          players: this.gameState.players,
+          enemyCountsPerLane: this._getEnemyCountsPerLane()
+        });
+
+        // e) Finally, send full sync snapshot to the newcomer so their UI hydrates
         this.syncState(socket, name);
         return;
       }
 
-      // b) Initialise per-player resource tracking object
-      const newPlayerObj = {
-        name,
-        gold: 0,
-        food: 0,
-        iron: 0,
-        jewels: 0,
-        workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
-        units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
-        upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0])),
-        autoSpawn: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]))
-      };
-      this.gameState.players.push(newPlayerObj);
-
-      // c) Make sure future resource ticks include this player (array ref shared)
-      //    -> already handled because ResourceTicker keeps reference to players array
-
-      // d) Broadcast updated battlefield so existing players see new lane
-      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
-        castleHp: this.gameState.castleHealth,
-        grid: this.gameState.grid.cells,
-        players: this.gameState.players,
-        enemyCountsPerLane: this._getEnemyCountsPerLane()
-      });
-
-      // e) Finally, send full sync snapshot to the newcomer so their UI hydrates
-      this.syncState(socket, name);
-      return;
+      // -----------------------------------------------------
+      // 2) Game not started ⇒ normal lobby join flow
+      // -----------------------------------------------------
+      if (!this.lobby.players.includes(name)) {
+        this.lobby.players.push(name);
+        this.lobby.ready.set(name, false);
+      }
+      this.safeEmitToRoom(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
+    } catch (error) {
+      console.error(`Error in join for socket ${socket.id}:`, error);
     }
-
-    // -----------------------------------------------------
-    // 2) Game not started ⇒ normal lobby join flow
-    // -----------------------------------------------------
-    if (!this.lobby.players.includes(name)) {
-      this.lobby.players.push(name);
-      this.lobby.ready.set(name, false);
-    }
-    this.io.in(this.roomId).emit(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
   }
 
   setReady(socket, ready) {
-    const name = this.socketToName.get(socket.id);
-    if (!name) return;
-    this.lobby.ready.set(name, ready);
-    this.io.in(this.roomId).emit(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
-    const allReady = this.lobby.players.length && Array.from(this.lobby.ready.values()).every(v => v);
-    if (allReady) this.startGame();
+    try {
+      const name = this.socketToName.get(socket.id);
+      if (!name) return;
+      this.lobby.ready.set(name, ready);
+      this.safeEmitToRoom(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
+      const allReady = this.lobby.players.length && Array.from(this.lobby.ready.values()).every(v => v);
+      if (allReady) this.startGame();
+    } catch (error) {
+      console.error(`Error in setReady for socket ${socket.id}:`, error);
+    }
   }
 
   mine(socket) {
@@ -180,8 +188,8 @@ export class GameService {
       };
       const unit = spawnPlayerUnit(this.gameState.grid, playerConfig, rowToUse, player.name, type);
       this.gameState.addUnit(unit);
-      this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });
-      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
+      this.safeEmitToRoom(EVENTS.UNIT_UPDATE, { unit });
+      this.safeEmitToRoom(EVENTS.STATE_UPDATE, {
         grid: this.gameState.grid.cells,
         enemyCountsPerLane: this._getEnemyCountsPerLane()
       });
@@ -189,64 +197,72 @@ export class GameService {
   }
 
   disconnect(socket) {
-    const name = this.socketToName.get(socket.id);
-    if (!name) return;
-    this.lobby.players = this.lobby.players.filter(p => p !== name);
-    this.lobby.ready.delete(name);
-    this.socketToName.delete(socket.id);
-    this.io.in(this.roomId).emit(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
+    try {
+      const name = this.socketToName.get(socket.id);
+      if (!name) return;
+      this.lobby.players = this.lobby.players.filter(p => p !== name);
+      this.lobby.ready.delete(name);
+      this.socketToName.delete(socket.id);
+      this.safeEmitToRoom(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
+    } catch (error) {
+      console.error(`Error handling disconnect for socket ${socket.id}:`, error);
+    }
   }
 
   startGame() {
-    this._clearIntervals();
-    // Calculate castle HP with bonus for large games
-    const playerCount = this.lobby.players.length;
-    const bonusHp = playerCount > 4 ? (playerCount - 4) * (GAME_BALANCE.LARGE_GAME_CASTLE_HP_BONUS || 0) : 0;
-    const totalCastleHp = GAME_BALANCE.INITIAL_CASTLE_HP + bonusHp;
-    
-    // Use new GameState with grid and castle health
-    this.gameState = new GameState([...this.lobby.players], undefined, totalCastleHp);
-    // Initialize player objects for resource tracking (legacy compatibility)
-    this.gameState.players = this.lobby.players.map(name => ({
-      name,
-      gold: GAME_BALANCE.STARTING_GOLD || 0,
-      food: GAME_BALANCE.STARTING_FOOD || 0,
-      iron: 0,
-      jewels: 0,
-      workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
-      units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
-      upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0])),
-      autoSpawn: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]))
-    }));
-    this.gameState.wave = 1;
-    this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
-    // Emit initial state (can be adapted to emit grid/castle health as needed)
-    this.io.in(this.roomId).emit(EVENTS.GAME_START, {
-      wave: this.gameState.wave,
-      castleHp: this.gameState.castleHealth,
-      players: this.gameState.players,
-      workerTypes: WORKER_TYPES,
-      unitTypes: UNIT_TYPES,
-      enemyTypes: ENEMY_TYPES,
-      upgradeTypes: UPGRADE_TYPES,
-      enemyCountsPerLane: this._getEnemyCountsPerLane()
-    });
-    // Start modular tickers with new state
-    this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
-    this.waveSpawner = new WaveSpawner(this.io, this.roomId, this.gameState);
-    this.countdownTicker = new CountdownTicker(this.io, this.roomId, this.gameState, () => {
-      this.waveSpawner.spawnWave();
+    try {
+      this._clearIntervals();
+      // Calculate castle HP with bonus for large games
+      const playerCount = this.lobby.players.length;
+      const bonusHp = playerCount > 4 ? (playerCount - 4) * (GAME_BALANCE.LARGE_GAME_CASTLE_HP_BONUS || 0) : 0;
+      const totalCastleHp = GAME_BALANCE.INITIAL_CASTLE_HP + bonusHp;
+      
+      // Use new GameState with grid and castle health
+      this.gameState = new GameState([...this.lobby.players], undefined, totalCastleHp);
+      // Initialize player objects for resource tracking (legacy compatibility)
+      this.gameState.players = this.lobby.players.map(name => ({
+        name,
+        gold: GAME_BALANCE.STARTING_GOLD || 0,
+        food: GAME_BALANCE.STARTING_FOOD || 0,
+        iron: 0,
+        jewels: 0,
+        workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
+        units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
+        upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0])),
+        autoSpawn: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]))
+      }));
+      this.gameState.wave = 1;
       this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
-      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
-    });
-    this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState, this);
-    this.castleRegenTicker = new CastleRegenTicker(this.io, this.roomId, this.gameState);
-    this.autoSpawnTicker = new AutoSpawnTicker(this.io, this.gameState, this);
-    this.resourceTicker.start();
-    this.countdownTicker.start();
-    this.combatTicker.start();
-    this.castleRegenTicker.start();
-    this.autoSpawnTicker.start();
+      // Emit initial state (can be adapted to emit grid/castle health as needed)
+      this.safeEmitToRoom(EVENTS.GAME_START, {
+        wave: this.gameState.wave,
+        castleHp: this.gameState.castleHealth,
+        players: this.gameState.players,
+        workerTypes: WORKER_TYPES,
+        unitTypes: UNIT_TYPES,
+        enemyTypes: ENEMY_TYPES,
+        upgradeTypes: UPGRADE_TYPES,
+        enemyCountsPerLane: this._getEnemyCountsPerLane()
+      });
+      // Start modular tickers with new state
+      this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
+      this.waveSpawner = new WaveSpawner(this.io, this.roomId, this.gameState);
+      this.countdownTicker = new CountdownTicker(this.io, this.roomId, this.gameState, () => {
+        this.waveSpawner.spawnWave();
+        this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
+        this.safeEmitToRoom(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
+      });
+      this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState, this);
+      this.castleRegenTicker = new CastleRegenTicker(this.io, this.roomId, this.gameState);
+      this.autoSpawnTicker = new AutoSpawnTicker(this.io, this.gameState, this);
+      this.resourceTicker.start();
+      this.countdownTicker.start();
+      this.combatTicker.start();
+      this.castleRegenTicker.start();
+      this.autoSpawnTicker.start();
+    } catch (error) {
+      console.error(`Error starting game in room ${this.roomId}:`, error);
+    }
   }
 
   _modifyResource(socket, key, amount) {
@@ -279,7 +295,7 @@ export class GameService {
     }
     if (onSuccess) onSuccess(player);
     this._emitResourceUpdate(socket, player);
-    if (category === 'units') socket.emit(EVENTS.UNIT_UPDATE, { units: player.units });
+    if (category === 'units') this.safeEmitToSocket(socket, EVENTS.UNIT_UPDATE, { units: player.units });
   }
 
   _getPlayer(socket) {
@@ -288,24 +304,28 @@ export class GameService {
   }
 
   _emitResourceUpdate(socket, player) {
-    // Prepare all players' resources for broadcasting
-    const allPlayersResources = {};
-    if (this.gameState && this.gameState.players) {
-      this.gameState.players.forEach(p => {
-        allPlayersResources[p.name] = {
-          gold: Math.floor(p.gold),
-          food: Math.floor(p.food),
-          workers: p.workers
-        };
-      });
-    }
+    try {
+      // Prepare all players' resources for broadcasting
+      const allPlayersResources = {};
+      if (this.gameState && this.gameState.players) {
+        this.gameState.players.forEach(p => {
+          allPlayersResources[p.name] = {
+            gold: Math.floor(p.gold),
+            food: Math.floor(p.food),
+            workers: p.workers
+          };
+        });
+      }
 
-    socket.emit(EVENTS.RESOURCE_UPDATE, {
-      gold: Math.floor(player.gold),
-      food: Math.floor(player.food),
-      workers: player.workers,
-      allPlayersResources: allPlayersResources
-    });
+      this.safeEmitToSocket(socket, EVENTS.RESOURCE_UPDATE, {
+        gold: Math.floor(player.gold),
+        food: Math.floor(player.food),
+        workers: player.workers,
+        allPlayersResources: allPlayersResources
+      });
+    } catch (error) {
+      console.error(`Error emitting resource update for socket ${socket.id}:`, error);
+    }
   }
 
   _clearIntervals() {
@@ -325,54 +345,58 @@ export class GameService {
    * @param {string} playerName – The logical player name stored on the server.
    */
   syncState(socket, playerName) {
-    if (!this.gameState) {
-      // If the game hasn't started yet, just treat it like a lobby join instead.
-      this.io.to(socket.id).emit(EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
-      return;
-    }
-
-    // Ensure stale socketIds for the same logical user are cleared so that the
-    // ResourceTicker doesn't emit to a closed connection (which would starve
-    // the new one of updates because of the early `break` inside its loop).
-    for (const [id, name] of this.socketToName) {
-      if (name === playerName && id !== socket.id) {
-        this.socketToName.delete(id);
+    try {
+      if (!this.gameState) {
+        // If the game hasn't started yet, just treat it like a lobby join instead.
+        this.safeEmitToSocket(socket, EVENTS.LOBBY_UPDATE, Object.assign({}, this.lobby, { ready: Object.fromEntries(this.lobby.ready) }));
+        return;
       }
+
+      // Ensure stale socketIds for the same logical user are cleared so that the
+      // ResourceTicker doesn't emit to a closed connection (which would starve
+      // the new one of updates because of the early `break` inside its loop).
+      for (const [id, name] of this.socketToName) {
+        if (name === playerName && id !== socket.id) {
+          this.socketToName.delete(id);
+        }
+      }
+      this.socketToName.set(socket.id, playerName);
+
+      const player = this.gameState.players.find(p => p.name === playerName);
+
+      const payload = {
+        wave: this.gameState.wave,
+        nextWaveIn: this.gameState.nextWaveIn,
+        castleHp: this.gameState.castleHealth,
+        grid: this.gameState.grid,
+        players: this.gameState.players,
+        workerTypes: WORKER_TYPES,
+        unitTypes: UNIT_TYPES,
+        enemyTypes: ENEMY_TYPES,
+        upgradeTypes: UPGRADE_TYPES,
+        playerName,
+        roomId: this.roomId,
+        // Player-specific live resources at reconnect time
+        gold: Math.floor(player?.gold ?? 0),
+        food: Math.floor(player?.food ?? 0),
+        workers: player?.workers ?? {},
+        playerUnits: player?.units ?? {},
+        upgrades: player?.upgrades ?? {},
+        autoSpawn: player?.autoSpawn ?? {}
+      };
+
+      // Add enemy counts per lane
+      const enemyCountsPerLane = this._getEnemyCountsPerLane();
+      payload.enemyCountsPerLane = enemyCountsPerLane;
+
+      this.safeEmitToSocket(socket, EVENTS.RESTORE_GAME, { gameState: payload, playerName, roomId: this.roomId });
+
+      // Also send a direct RESOURCE_UPDATE so the client UI can hydrate even if it
+      // relies purely on that event stream.
+      if (player) this._emitResourceUpdate(socket, player);
+    } catch (error) {
+      console.error(`Error syncing state for socket ${socket.id}:`, error);
     }
-    this.socketToName.set(socket.id, playerName);
-
-    const player = this.gameState.players.find(p => p.name === playerName);
-
-        const payload = {
-      wave: this.gameState.wave,
-      nextWaveIn: this.gameState.nextWaveIn,
-      castleHp: this.gameState.castleHealth,
-      grid: this.gameState.grid,
-      players: this.gameState.players,
-      workerTypes: WORKER_TYPES,
-      unitTypes: UNIT_TYPES,
-      enemyTypes: ENEMY_TYPES,
-      upgradeTypes: UPGRADE_TYPES,
-      playerName,
-      roomId: this.roomId,
-      // Player-specific live resources at reconnect time
-      gold: Math.floor(player?.gold ?? 0),
-      food: Math.floor(player?.food ?? 0),
-      workers: player?.workers ?? {},
-      playerUnits: player?.units ?? {},
-      upgrades: player?.upgrades ?? {},
-      autoSpawn: player?.autoSpawn ?? {}
-    };
-
-    // Add enemy counts per lane
-    const enemyCountsPerLane = this._getEnemyCountsPerLane();
-    payload.enemyCountsPerLane = enemyCountsPerLane;
-
-    socket.emit(EVENTS.RESTORE_GAME, { gameState: payload, playerName, roomId: this.roomId });
-
-    // Also send a direct RESOURCE_UPDATE so the client UI can hydrate even if it
-    // relies purely on that event stream.
-    if (player) this._emitResourceUpdate(socket, player);
   }
 
   // Helper methods for upgrade effects
@@ -489,11 +513,11 @@ export class GameService {
     
     // Emit updates
     this._emitResourceUpdate(socket, player);
-    socket.emit(EVENTS.UPGRADE_UPDATE, { upgrades: player.upgrades });
+    this.safeEmitToSocket(socket, EVENTS.UPGRADE_UPDATE, { upgrades: player.upgrades });
     
     // Broadcast castle HP changes if applicable
     if (upgradeId === 'CASTLE_FORTIFICATION') {
-      this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
+      this.safeEmitToRoom(EVENTS.STATE_UPDATE, {
         castleHp: this.gameState.castleHealth
       });
     }
@@ -515,7 +539,7 @@ export class GameService {
     player.autoSpawn[unitType].enabled = !player.autoSpawn[unitType].enabled;
     
     // Emit update
-    socket.emit(EVENTS.AUTO_SPAWN_UPDATE, { autoSpawn: player.autoSpawn });
+    this.safeEmitToSocket(socket, EVENTS.AUTO_SPAWN_UPDATE, { autoSpawn: player.autoSpawn });
   }
 
   setAutoSpawnAmount(socket, unitType, amount) {
@@ -537,7 +561,7 @@ export class GameService {
     player.autoSpawn[unitType].amount = validAmount;
     
     // Emit update
-    socket.emit(EVENTS.AUTO_SPAWN_UPDATE, { autoSpawn: player.autoSpawn });
+    this.safeEmitToSocket(socket, EVENTS.AUTO_SPAWN_UPDATE, { autoSpawn: player.autoSpawn });
   }
 
   _getEnemyCountsPerLane() {
@@ -560,5 +584,24 @@ export class GameService {
     }
     
     return counts;
+  }
+
+  // Helper methods for safe socket emission
+  safeEmitToRoom(event, data) {
+    try {
+      this.io.in(this.roomId).emit(event, data);
+    } catch (error) {
+      console.error(`Error emitting ${event} to room ${this.roomId}:`, error);
+    }
+  }
+
+  safeEmitToSocket(socket, event, data) {
+    try {
+      if (socket && socket.connected) {
+        socket.emit(event, data);
+      }
+    } catch (error) {
+      console.error(`Error emitting ${event} to socket ${socket?.id}:`, error);
+    }
   }
 }

@@ -44,12 +44,19 @@ export class ResourceTicker {
 
         for (let [id, name] of this.socketToName.entries()) {
           if (name === p.name) {
-            this.io.to(id).emit(EVENTS.RESOURCE_UPDATE, {
-              gold: Math.floor(p.gold),
-              food: Math.floor(p.food),
-              workers: p.workers,
-              allPlayersResources: allPlayersResources
-            });
+            try {
+              const socket = this.io.sockets.sockets.get(id);
+              if (socket && socket.connected) {
+                socket.emit(EVENTS.RESOURCE_UPDATE, {
+                  gold: Math.floor(p.gold),
+                  food: Math.floor(p.food),
+                  workers: p.workers,
+                  allPlayersResources: allPlayersResources
+                });
+              }
+            } catch (emitError) {
+              console.error(`Error emitting resource update to socket ${id}:`, emitError);
+            }
             break;
           }
         }
@@ -108,12 +115,19 @@ export class ResourceTicker {
 
           for (let [id, name] of this.socketToName.entries()) {
             if (name === p.name) {
-              this.io.to(id).emit(EVENTS.RESOURCE_UPDATE, {
-                gold: Math.floor(p.gold),
-                food: Math.floor(p.food),
-                workers: p.workers,
-                allPlayersResources: allPlayersResources
-              });
+              try {
+                const socket = this.io.sockets.sockets.get(id);
+                if (socket && socket.connected) {
+                  socket.emit(EVENTS.RESOURCE_UPDATE, {
+                    gold: Math.floor(p.gold),
+                    food: Math.floor(p.food),
+                    workers: p.workers,
+                    allPlayersResources: allPlayersResources
+                  });
+                }
+              } catch (emitError) {
+                console.error(`Error emitting resource update to socket ${id}:`, emitError);
+              }
               break;
             }
           }
