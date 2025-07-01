@@ -37,9 +37,11 @@ export class CombatTicker {
         // Emit current grid state (after movement & new spawns) so clients display units immediately.
         // HP values are still intact because damage hasn't been processed yet, so bars remain full until the
         // mid-tick damage pass.
+        const enemyCountsPerLane = this.gameService ? this.gameService._getEnemyCountsPerLane() : {};
         this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
           castleHp: this.gameState.castleHealth,
-          grid: JSON.parse(JSON.stringify(this.gameState.grid.cells))
+          grid: JSON.parse(JSON.stringify(this.gameState.grid.cells)),
+          enemyCountsPerLane
         });
 
         /*
@@ -58,9 +60,11 @@ export class CombatTicker {
             }
 
             // Emit updated state after damage has been applied
+            const updatedEnemyCountsPerLane = this.gameService ? this.gameService._getEnemyCountsPerLane() : {};
             this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
               castleHp: this.gameState.castleHealth,
-              grid: JSON.parse(JSON.stringify(this.gameState.grid.cells))
+              grid: JSON.parse(JSON.stringify(this.gameState.grid.cells)),
+              enemyCountsPerLane: updatedEnemyCountsPerLane
             });
 
             // Game-over check (after damage)

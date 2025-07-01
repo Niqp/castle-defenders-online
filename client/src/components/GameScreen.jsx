@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import PixiStage from './PixiStage';
 import Loading from './Loading.jsx';
 import WorkerCard, { WorkerAnimationProvider } from './ui/WorkerCard';
+import { EVENTS } from '../events.js';
 import swordsmanImg from '../sprites/units/swordsman.png';
 import archerImg from '../sprites/units/archer.png';
 import knightImg from '../sprites/units/knight.png';
@@ -38,10 +39,12 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   const [workers, setWorkers] = useState(gameState?.workers ?? { Miner: 0, Digger: 0, Excavator: 0 });
   const [playerUnits, setPlayerUnits] = useState(gameState?.playerUnits ?? { Swordsman: 0, Archer: 0, Knight: 0 });
   const [upgrades, setUpgrades] = useState(gameState?.upgrades ?? {});
+  const [autoSpawn, setAutoSpawn] = useState(gameState?.autoSpawn ?? {});
   const [enemies, setEnemies] = useState(gameState?.enemies ?? []);
   const [units, setUnits] = useState(gameState?.units ?? []); // Assuming units are player-controlled units on the map
   const [wave, setWave] = useState(gameState?.wave ?? 1);
   const [grid, setGrid] = useState(gameState?.grid ?? []);
+  const [enemyCountsPerLane, setEnemyCountsPerLane] = useState(gameState?.enemyCountsPerLane ?? {});
   const [allPlayersResources, setAllPlayersResources] = useState({});
 
   const prevEnemiesRef = useRef(gameState?.enemies ?? []);
@@ -65,7 +68,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     const socket = socketRef.current;
     if (!socket) return;
 
-    socket.on('resourceUpdate', (data) => {
+    socket.on(EVENTS.RESOURCE_UPDATE, (data) => {
       if (data) {
         if (data.gold !== undefined) setGold(data.gold);
         if (data.food !== undefined) setFood(data.food);
@@ -74,13 +77,16 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
         if (data.allPlayersResources) setAllPlayersResources(data.allPlayersResources);
       }
     });
-    socket.on('unitUpdate', (data) => {
+    socket.on(EVENTS.UNIT_UPDATE, (data) => {
       if (data && data.units) setPlayerUnits(prev => ({...prev, ...data.units}));
     });
-    socket.on('upgradeUpdate', (data) => {
+    socket.on(EVENTS.UPGRADE_UPDATE, (data) => {
       if (data && data.upgrades) setUpgrades(prev => ({...prev, ...data.upgrades}));
     });
-    socket.on('stateUpdate', (data) => {
+    socket.on(EVENTS.AUTO_SPAWN_UPDATE, (data) => {
+      if (data && data.autoSpawn) setAutoSpawn(prev => ({...prev, ...data.autoSpawn}));
+    });
+    socket.on(EVENTS.STATE_UPDATE, (data) => {
       if (data.wave !== undefined) setWave(data.wave);
       if (data.nextWaveIn !== undefined) {
         setNextWaveIn(data.nextWaveIn);
@@ -91,15 +97,16 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
         setCastleHp(typeof data.castleHp === 'object' ? data.castleHp : { [playerName]: data.castleHp });
       }
       if (data.grid) setGrid(data.grid);
+      if (data.enemyCountsPerLane) setEnemyCountsPerLane(data.enemyCountsPerLane);
     });
-    socket.on('spawnEnemies', (data) => {
+    socket.on(EVENTS.SPAWN_ENEMIES, (data) => {
       if (data && Array.isArray(data.enemies)) {
         prevEnemiesRef.current = enemies; // For interpolation if PixiStage uses it
         lastUpdateRef.current = Date.now();
         setEnemies(data.enemies);
       }
     });
-    socket.on('spawnUnits', (data) => {
+    socket.on(EVENTS.SPAWN_UNITS, (data) => {
       // Assuming 'units' are player units on the map, distinct from 'playerUnits' (counts)
       if (data && Array.isArray(data.units)) {
         // prevUnitsRef.current = units; // If interpolation is needed for these units
@@ -112,23 +119,32 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     // socket.emit('requestInitialGameState'); // Example: if you need to fetch fresh state
 
     return () => {
-      socket.off('resourceUpdate');
-      socket.off('unitUpdate');
-      socket.off('upgradeUpdate');
-      socket.off('stateUpdate');
-      socket.off('spawnEnemies');
-      socket.off('spawnUnits');
+      socket.off(EVENTS.RESOURCE_UPDATE);
+      socket.off(EVENTS.UNIT_UPDATE);
+      socket.off(EVENTS.UPGRADE_UPDATE);
+      socket.off(EVENTS.AUTO_SPAWN_UPDATE);
+      socket.off(EVENTS.STATE_UPDATE);
+      socket.off(EVENTS.SPAWN_ENEMIES);
+      socket.off(EVENTS.SPAWN_UNITS);
     };
   }, [socketRef]); // Fix #4: Only depend on socketRef to prevent listener churn
 
   function handleHireWorker(type) {
-    socketRef.current?.emit('hireWorker', type);
+    socketRef.current?.emit(EVENTS.HIRE_WORKER, type);
   }
   function handleSpawnUnit(type) {
-    socketRef.current?.emit('spawnUnit', type, selectedCol);
+    socketRef.current?.emit(EVENTS.SPAWN_UNIT, type, selectedCol);
   }
   function handlePurchaseUpgrade(upgradeId) {
-    socketRef.current?.emit('purchaseUpgrade', upgradeId);
+    socketRef.current?.emit(EVENTS.PURCHASE_UPGRADE, upgradeId);
+  }
+  
+  function handleToggleAutoSpawn(unitType) {
+    socketRef.current?.emit(EVENTS.TOGGLE_AUTO_SPAWN, unitType);
+  }
+  
+  function handleSetAutoSpawnAmount(unitType, amount) {
+    socketRef.current?.emit(EVENTS.SET_AUTO_SPAWN_AMOUNT, unitType, amount);
   }
 
   const mineButtonRef = useRef(null);
@@ -178,7 +194,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
   };
 
   const handleMine = () => {
-    socketRef.current?.emit('mine');
+    socketRef.current?.emit(EVENTS.MINE);
   };
 
   const [animatedWaveIn, setAnimatedWaveIn] = useState(nextWaveIn);
@@ -734,12 +750,59 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                                 <div className="text-base-content/50 line-through text-xs">{unit.originalDmg}</div>
                               )}
                             </div>
+                                                    </div>
+                        </div>
+
+                        {/* Auto-spawn controls */}
+                        <div className="mt-3 p-2 bg-base-100 rounded border-l-4 border-accent">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-accent" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                              </svg>
+                              <span className="text-sm font-medium">Auto-spawn</span>
+                            </div>
+                            <div className="form-control">
+                              <label className="label cursor-pointer gap-2 p-0">
+                                <input 
+                                  type="checkbox" 
+                                  className="toggle toggle-accent toggle-sm" 
+                                  checked={autoSpawn[unit.type]?.enabled || false}
+                                  onChange={() => handleToggleAutoSpawn(unit.type)}
+                                  disabled={!playerAlive}
+                                />
+                              </label>
+                            </div>
                           </div>
-                                                 </div>
-                       </div>
-                     </div>
-                   );
-                 })}
+                          
+                          {autoSpawn[unit.type]?.enabled && (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-base-content/70 min-w-0 flex-shrink-0">Amount per second:</label>
+                                <input
+                                  type="range"
+                                  min="1"
+                                  max="10"
+                                  step="1"
+                                  value={autoSpawn[unit.type]?.amount || 1}
+                                  onChange={(e) => handleSetAutoSpawnAmount(unit.type, parseInt(e.target.value))}
+                                  className="range range-accent range-xs flex-grow"
+                                  disabled={!playerAlive}
+                                />
+                                <span className="text-xs font-medium min-w-0 flex-shrink-0">
+                                  {autoSpawn[unit.type]?.amount || 1}
+                                </span>
+                              </div>
+                              <div className="text-xs text-base-content/60 text-center">
+                                Auto-spawns {autoSpawn[unit.type]?.amount || 1} {unit.type}{(autoSpawn[unit.type]?.amount || 1) > 1 ? 's' : ''} per second when resources are available
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
 
                  {/* Row Selection for Military */}
                  {rows > 1 && (
@@ -783,17 +846,73 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
 
             {/* Stats Tab */}
             {activeTab === 'stats' && (
-              <div className="card bg-base-300 shadow-md compact">
-                <div className="card-body p-3 sm:p-4">
-                  <h3 className="card-title text-md sm:text-lg">Battle Info</h3>
-                  <div className="space-y-1 mt-2 text-sm sm:text-base">
-                    <div className="flex justify-between"><span>Current Wave:</span> <span className="font-semibold text-info">{wave}</span></div>
-                    <div className="flex justify-between"><span>Castle Health:</span> <span className="font-semibold text-error">{castleHp[playerName] ?? 0}/{MAX_CASTLE_HP}</span></div>
-                    <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(aliveUnitCounts).reduce((a, b) => a + b, 0)}</span></div>
+              <>
+                <div className="card bg-base-300 shadow-md compact">
+                  <div className="card-body p-3 sm:p-4">
+                    <h3 className="card-title text-md sm:text-lg">Battle Info</h3>
+                    <div className="space-y-1 mt-2 text-sm sm:text-base">
+                      <div className="flex justify-between"><span>Current Wave:</span> <span className="font-semibold text-info">{wave}</span></div>
+                      <div className="flex justify-between"><span>Castle Health:</span> <span className="font-semibold text-error">{castleHp[playerName] ?? 0}/{MAX_CASTLE_HP}</span></div>
+                      <div className="flex justify-between"><span>Total Units:</span> <span className="font-semibold">{Object.values(aliveUnitCounts).reduce((a, b) => a + b, 0)}</span></div>
+                    </div>
                   </div>
-                  <hr className="my-3 opacity-50" />
-                  <div className="space-y-2">
-                    {(() => {
+                </div>
+
+                {/* Enemy Counts Per Lane */}
+                {Object.keys(enemyCountsPerLane).length > 0 && (
+                  <div className="card bg-base-300 shadow-md compact">
+                    <div className="card-body p-3 sm:p-4">
+                      <h3 className="card-title text-md sm:text-lg flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Enemy Threats
+                      </h3>
+                      <div className="space-y-2 mt-2">
+                        {Object.entries(enemyCountsPerLane).map(([lane, count]) => {
+                          const laneNumber = parseInt(lane) + 1;
+                          const playerName = Array.isArray(gameState?.players) && gameState.players[lane] 
+                            ? (typeof gameState.players[lane] === 'string' ? gameState.players[lane] : gameState.players[lane].name)
+                            : `Lane ${laneNumber}`;
+                          
+                          return (
+                            <div key={lane} className="flex items-center justify-between p-2 bg-base-200 rounded">
+                              <div className="flex items-center gap-2">
+                                <span className="badge badge-primary badge-sm">{laneNumber}</span>
+                                <span className="text-sm truncate">{playerName}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-semibold ${
+                                  count === 0 ? 'text-success' : 
+                                  count <= 3 ? 'text-warning' : 
+                                  'text-error'
+                                }`}>
+                                  {count} enemies
+                                </span>
+                                {count > 0 && (
+                                  <div className="flex">
+                                    {Array.from({ length: Math.min(count, 5) }).map((_, i) => (
+                                      <svg key={i} xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                      </svg>
+                                    ))}
+                                    {count > 5 && <span className="text-xs text-red-400 ml-1">+{count - 5}</span>}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                                 )}
+                
+                <div className="card bg-base-300 shadow-md compact">
+                  <div className="card-body p-3 sm:p-4">
+                    <hr className="my-3 opacity-50" />
+                    <div className="space-y-2">
+                      {(() => {
                       // Determine display order based on lane (players array order)
                       const orderedNames = Array.isArray(gameState?.players)
                         ? gameState.players.map(p => (typeof p === 'string' ? p : p.name))
@@ -836,9 +955,10 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                         );
                       });
                     })()}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
 
             {/* Upgrades Tab */}

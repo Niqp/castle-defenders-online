@@ -5,6 +5,7 @@ import { WaveSpawner } from '../ticker/WaveSpawner.js';
 import { CountdownTicker } from '../ticker/CountdownTicker.js';
 import { CombatTicker } from '../ticker/CombatTicker.js';
 import { CastleRegenTicker } from '../ticker/CastleRegenTicker.js';
+import { AutoSpawnTicker } from '../ticker/AutoSpawnTicker.js';
 // New grid-based imports
 import GameState from '../game/GameState.js';
 import { spawnEnemyUnit, spawnPlayerUnit } from '../game/Spawner.js';
@@ -83,7 +84,8 @@ export class GameService {
         jewels: 0,
         workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
         units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
-        upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0]))
+        upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0])),
+        autoSpawn: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]))
       };
       this.gameState.players.push(newPlayerObj);
 
@@ -94,7 +96,8 @@ export class GameService {
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
         castleHp: this.gameState.castleHealth,
         grid: this.gameState.grid.cells,
-        players: this.gameState.players
+        players: this.gameState.players,
+        enemyCountsPerLane: this._getEnemyCountsPerLane()
       });
 
       // e) Finally, send full sync snapshot to the newcomer so their UI hydrates
@@ -179,7 +182,8 @@ export class GameService {
       this.gameState.addUnit(unit);
       this.io.in(this.roomId).emit(EVENTS.UNIT_UPDATE, { unit });
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, {
-        grid: this.gameState.grid.cells
+        grid: this.gameState.grid.cells,
+        enemyCountsPerLane: this._getEnemyCountsPerLane()
       });
     });
   }
@@ -195,18 +199,24 @@ export class GameService {
 
   startGame() {
     this._clearIntervals();
+    // Calculate castle HP with bonus for large games
+    const playerCount = this.lobby.players.length;
+    const bonusHp = playerCount > 4 ? (playerCount - 4) * (GAME_BALANCE.LARGE_GAME_CASTLE_HP_BONUS || 0) : 0;
+    const totalCastleHp = GAME_BALANCE.INITIAL_CASTLE_HP + bonusHp;
+    
     // Use new GameState with grid and castle health
-    this.gameState = new GameState([...this.lobby.players], undefined, GAME_BALANCE.INITIAL_CASTLE_HP);
+    this.gameState = new GameState([...this.lobby.players], undefined, totalCastleHp);
     // Initialize player objects for resource tracking (legacy compatibility)
     this.gameState.players = this.lobby.players.map(name => ({
       name,
-      gold: 0,
-      food: 0,
+      gold: GAME_BALANCE.STARTING_GOLD || 0,
+      food: GAME_BALANCE.STARTING_FOOD || 0,
       iron: 0,
       jewels: 0,
       workers: Object.fromEntries(Object.keys(WORKER_TYPES).map(k => [k, 0])),
       units: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, 0])),
-      upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0]))
+      upgrades: Object.fromEntries(Object.keys(UPGRADE_TYPES).map(k => [k, 0])),
+      autoSpawn: Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]))
     }));
     this.gameState.wave = 1;
     this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
@@ -218,7 +228,8 @@ export class GameService {
       workerTypes: WORKER_TYPES,
       unitTypes: UNIT_TYPES,
       enemyTypes: ENEMY_TYPES,
-      upgradeTypes: UPGRADE_TYPES
+      upgradeTypes: UPGRADE_TYPES,
+      enemyCountsPerLane: this._getEnemyCountsPerLane()
     });
     // Start modular tickers with new state
     this.resourceTicker = new ResourceTicker(this.io, this.socketToName, this.gameState.players);
@@ -230,10 +241,12 @@ export class GameService {
     });
     this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState, this);
     this.castleRegenTicker = new CastleRegenTicker(this.io, this.roomId, this.gameState);
+    this.autoSpawnTicker = new AutoSpawnTicker(this.io, this.gameState, this);
     this.resourceTicker.start();
     this.countdownTicker.start();
     this.combatTicker.start();
     this.castleRegenTicker.start();
+    this.autoSpawnTicker.start();
   }
 
   _modifyResource(socket, key, amount) {
@@ -296,7 +309,7 @@ export class GameService {
   }
 
   _clearIntervals() {
-    [this.resourceTicker, this.waveSpawner, this.countdownTicker, this.combatTicker, this.castleRegenTicker].forEach(ticker => {
+    [this.resourceTicker, this.waveSpawner, this.countdownTicker, this.combatTicker, this.castleRegenTicker, this.autoSpawnTicker].forEach(ticker => {
       if (ticker && typeof ticker.stop === 'function') {
         ticker.stop();
       }
@@ -330,7 +343,7 @@ export class GameService {
 
     const player = this.gameState.players.find(p => p.name === playerName);
 
-    const payload = {
+        const payload = {
       wave: this.gameState.wave,
       nextWaveIn: this.gameState.nextWaveIn,
       castleHp: this.gameState.castleHealth,
@@ -347,8 +360,13 @@ export class GameService {
       food: Math.floor(player?.food ?? 0),
       workers: player?.workers ?? {},
       playerUnits: player?.units ?? {},
-      upgrades: player?.upgrades ?? {}
+      upgrades: player?.upgrades ?? {},
+      autoSpawn: player?.autoSpawn ?? {}
     };
+
+    // Add enemy counts per lane
+    const enemyCountsPerLane = this._getEnemyCountsPerLane();
+    payload.enemyCountsPerLane = enemyCountsPerLane;
 
     socket.emit(EVENTS.RESTORE_GAME, { gameState: payload, playerName, roomId: this.roomId });
 
@@ -479,5 +497,68 @@ export class GameService {
         castleHp: this.gameState.castleHealth
       });
     }
+  }
+
+  toggleAutoSpawn(socket, unitType) {
+    const name = this.socketToName.get(socket.id);
+    if (!this.gameState?.isPlayerAlive(name)) return;
+    
+    const player = this._getPlayer(socket);
+    if (!player || !UNIT_TYPES[unitType]) return;
+    
+    // Initialize autoSpawn if it doesn't exist
+    if (!player.autoSpawn) {
+      player.autoSpawn = Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]));
+    }
+    
+    // Toggle the auto-spawn for this unit type
+    player.autoSpawn[unitType].enabled = !player.autoSpawn[unitType].enabled;
+    
+    // Emit update
+    socket.emit(EVENTS.AUTO_SPAWN_UPDATE, { autoSpawn: player.autoSpawn });
+  }
+
+  setAutoSpawnAmount(socket, unitType, amount) {
+    const name = this.socketToName.get(socket.id);
+    if (!this.gameState?.isPlayerAlive(name)) return;
+    
+    const player = this._getPlayer(socket);
+    if (!player || !UNIT_TYPES[unitType]) return;
+    
+    // Validate amount (1-10 per tick seems reasonable)
+    const validAmount = Math.max(1, Math.min(10, Math.floor(amount)));
+    
+    // Initialize autoSpawn if it doesn't exist
+    if (!player.autoSpawn) {
+      player.autoSpawn = Object.fromEntries(Object.keys(UNIT_TYPES).map(k => [k, { enabled: false, amount: 1 }]));
+    }
+    
+    // Set the amount
+    player.autoSpawn[unitType].amount = validAmount;
+    
+    // Emit update
+    socket.emit(EVENTS.AUTO_SPAWN_UPDATE, { autoSpawn: player.autoSpawn });
+  }
+
+  _getEnemyCountsPerLane() {
+    if (!this.gameState || !this.gameState.grid) return {};
+    
+    const counts = {};
+    
+    // Initialize counts for all rows
+    for (let row = 0; row < this.gameState.grid.rows; row++) {
+      counts[row] = 0;
+    }
+    
+    // Count enemies in each row
+    for (let col = 0; col < this.gameState.grid.columns; col++) {
+      for (let row = 0; row < this.gameState.grid.rows; row++) {
+        const units = this.gameState.grid.getUnitsInCell(row, col);
+        const enemyCount = units.filter(u => u.type === 'enemy' && u.isAlive()).length;
+        counts[row] += enemyCount;
+      }
+    }
+    
+    return counts;
   }
 }

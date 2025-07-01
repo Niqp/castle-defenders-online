@@ -10,6 +10,8 @@ export const EVENTS = {
   MINE: 'mine',
   HIRE_WORKER: 'hireWorker',
   SPAWN_UNIT: 'spawnUnit',
+  TOGGLE_AUTO_SPAWN: 'toggleAutoSpawn',
+  SET_AUTO_SPAWN_AMOUNT: 'setAutoSpawnAmount',
   PURCHASE_UPGRADE: 'purchaseUpgrade',
   DISCONNECT: 'disconnect',
 
@@ -21,6 +23,7 @@ export const EVENTS = {
   SPAWN_UNITS: 'spawnUnits',
   STATE_UPDATE: 'stateUpdate',
   UPGRADE_UPDATE: 'upgradeUpdate',
+  AUTO_SPAWN_UPDATE: 'autoSpawnUpdate',
   GAME_OVER: 'gameOver',
 
   // Client persistence events

@@ -141,6 +141,26 @@ io.on(EVENTS.CONNECTION, socket => {
     }
   });
 
+  // ADD: Handle toggle auto-spawn from client
+  socket.on(EVENTS.TOGGLE_AUTO_SPAWN, (unitType) => {
+    const roomId = roomManager.socketToRoom.get(socket.id);
+    if (!roomId) return;
+    const service = roomManager.rooms.get(roomId);
+    if (service && typeof service.toggleAutoSpawn === 'function') {
+      service.toggleAutoSpawn(socket, unitType);
+    }
+  });
+
+  // ADD: Handle set auto-spawn amount from client
+  socket.on(EVENTS.SET_AUTO_SPAWN_AMOUNT, (unitType, amount) => {
+    const roomId = roomManager.socketToRoom.get(socket.id);
+    if (!roomId) return;
+    const service = roomManager.rooms.get(roomId);
+    if (service && typeof service.setAutoSpawnAmount === 'function') {
+      service.setAutoSpawnAmount(socket, unitType, amount);
+    }
+  });
+
   socket.on('disconnect', () => {
     const roomId = roomManager.socketToRoom.get(socket.id);
     if (!roomId) return;

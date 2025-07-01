@@ -24,32 +24,43 @@ export class WaveSpawner {
         return [];
       }
 
-      // Calculate number of enemies based on active players
+      // Calculate number of enemies based on active players with power curve
       const activePlayerCount = aliveRows.length;
-      const enemiesFromPlayerScaling = Math.floor(this.gameState.wave * activePlayerCount * WAVE_CONFIG.ENEMIES_PER_PLAYER_SCALING);
+      // Apply power curve to player count for better scaling
+      const scaledPlayerCount = Math.pow(activePlayerCount, WAVE_CONFIG.PLAYER_COUNT_SCALING_CURVE || 1);
+      const enemiesFromPlayerScaling = Math.floor(this.gameState.wave * scaledPlayerCount * WAVE_CONFIG.ENEMIES_PER_PLAYER_SCALING);
       const totalEnemies = WAVE_CONFIG.BASE_ENEMIES_PER_WAVE + enemiesFromPlayerScaling;
+      
+      // Apply per-lane cap for large games
+      const maxEnemiesForLanes = aliveRows.length * (WAVE_CONFIG.MAX_ENEMIES_PER_LANE || 999);
+      const cappedTotalEnemies = Math.min(totalEnemies, maxEnemiesForLanes);
 
       const newEnemies = [];
       const enemyTypeKeys = Object.keys(ENEMY_TYPES);
       const enemyTypesArr = enemyTypeKeys.length ? enemyTypeKeys : ['basic'];
 
-      for (let i = 0; i < totalEnemies; i++) {
-        // Select enemy type based on wave progression
-        const enemyType = this._selectEnemyTypeByWave(enemyTypesArr, this.gameState.wave);
-        const def = ENEMY_TYPES[enemyType] || WAVE_CONFIG.FALLBACK_ENEMY;
+      // Distribute enemies more fairly across lanes
+      const enemyDistribution = this._distributeEnemiesAcrossLanes(cappedTotalEnemies, aliveRows);
+      
+      for (let row = 0; row < enemyDistribution.length; row++) {
+        const enemiesForThisRow = enemyDistribution[row];
         
-        // Use base stats without scaling
-        const enemyConfig = {
-          maxHealth: def.baseHealth,
-          damage: def.baseDamage,
-          subtype: enemyType,
-        };
-        
-        // Choose a random alive row to spawn this enemy
-        const row = aliveRows[Math.floor(Math.random() * aliveRows.length)];
-        const enemy = spawnEnemyUnit(this.gameState.grid, enemyConfig, row);
-        this.gameState.addUnit(enemy);
-        newEnemies.push(enemy);
+        for (let i = 0; i < enemiesForThisRow; i++) {
+          // Select enemy type based on wave progression
+          const enemyType = this._selectEnemyTypeByWave(enemyTypesArr, this.gameState.wave);
+          const def = ENEMY_TYPES[enemyType] || WAVE_CONFIG.FALLBACK_ENEMY;
+          
+          // Use base stats without scaling
+          const enemyConfig = {
+            maxHealth: def.baseHealth,
+            damage: def.baseDamage,
+            subtype: enemyType,
+          };
+          
+          const enemy = spawnEnemyUnit(this.gameState.grid, enemyConfig, aliveRows[row]);
+          this.gameState.addUnit(enemy);
+          newEnemies.push(enemy);
+        }
       }
       
       this.io.in(this.roomId).emit(EVENTS.SPAWN_ENEMIES, { enemies: newEnemies });
@@ -59,6 +70,66 @@ export class WaveSpawner {
       console.error('WaveSpawner error', err);
       return [];
     }
+  }
+
+  /**
+   * Distributes enemies across lanes with smoothing to reduce RNG
+   */
+  _distributeEnemiesAcrossLanes(totalEnemies, aliveRows) {
+    const laneCount = aliveRows.length;
+    const distribution = new Array(laneCount).fill(0);
+    
+    // Base distribution (perfectly even)
+    const basePerLane = Math.floor(totalEnemies / laneCount);
+    const remainder = totalEnemies % laneCount;
+    
+    // Fill base amount
+    for (let i = 0; i < laneCount; i++) {
+      distribution[i] = basePerLane;
+    }
+    
+    // Distribute remainder
+    for (let i = 0; i < remainder; i++) {
+      distribution[i]++;
+    }
+    
+    // Apply smoothing factor (mix between perfect and random distribution)
+    const smoothing = WAVE_CONFIG.LANE_DISTRIBUTION_SMOOTHING || 0;
+    if (smoothing < 1) {
+      // Add some randomness based on smoothing factor
+      const randomFactor = 1 - smoothing;
+      const redistribution = Math.floor(totalEnemies * randomFactor * 0.3); // Up to 30% can be redistributed
+      
+      for (let i = 0; i < redistribution; i++) {
+        const from = Math.floor(Math.random() * laneCount);
+        const to = Math.floor(Math.random() * laneCount);
+        
+        if (distribution[from] > 1) { // Don't leave lanes empty
+          distribution[from]--;
+          distribution[to]++;
+        }
+      }
+    }
+    
+    // Ensure minimum enemies per lane if configured
+    const minPerLane = WAVE_CONFIG.MIN_ENEMIES_PER_ACTIVE_LANE || 0;
+    if (minPerLane > 0 && totalEnemies >= laneCount * minPerLane) {
+      for (let i = 0; i < laneCount; i++) {
+        if (distribution[i] < minPerLane) {
+          // Take from lanes with excess
+          for (let j = 0; j < laneCount; j++) {
+            if (distribution[j] > minPerLane + 1) {
+              const transfer = minPerLane - distribution[i];
+              distribution[j] -= transfer;
+              distribution[i] += transfer;
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    return distribution;
   }
 
   /**
