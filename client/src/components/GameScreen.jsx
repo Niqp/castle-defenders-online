@@ -620,11 +620,12 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
             <div className="flex items-center justify-end space-x-3">
               <span className="text-sm font-medium text-base-content/70">Castle HP</span>
               <div className="flex items-center space-x-2">
-                <progress 
-                  className="progress progress-error w-24 h-3" 
-                  value={castleHpPercentage} 
-                  max="100"
-                ></progress>
+                <div className="w-24 h-3 bg-base-content/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-error transition-all duration-300 ease-out"
+                    style={{ width: `${castleHpPercentage}%` }}
+                  ></div>
+                </div>
                 <span className="text-sm font-semibold min-w-[4rem] text-right">
                   {castleHp[playerName] ?? 0}/{MAX_CASTLE_HP}
                 </span>
@@ -672,11 +673,12 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
               {/* Castle Health */}
               <div className="flex items-center space-x-2 min-w-0 flex-1 justify-end">
                 <span className="text-xs text-base-content/70 hidden sm:inline">HP</span>
-                <progress 
-                  className="progress progress-error flex-1 max-w-[5rem] h-2.5" 
-                  value={castleHpPercentage} 
-                  max="100"
-                ></progress>
+                <div className="flex-1 max-w-[5rem] h-2.5 bg-base-content/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-error transition-all duration-300 ease-out"
+                    style={{ width: `${castleHpPercentage}%` }}
+                  ></div>
+                </div>
                 <span className="text-xs font-semibold text-right min-w-[3rem]">
                   {castleHp[playerName] ?? 0}
                 </span>
@@ -1056,11 +1058,18 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                           : gameState?.players?.find(p => p.name === name)?.upgrades || {};
                         const playerMaxCastleHp = calculateMaxCastleHpForPlayer(playerUpgrades);
                         
+                        const hpPercentage = Math.max(0, Math.min(100, (hp / playerMaxCastleHp) * 100));
+                        
                         return (
-                          <div key={name} className="bg-base-200 p-2 rounded">
+                          <div key={`${name}-${hp}-${playerMaxCastleHp}`} className="bg-base-200 p-2 rounded">
                             <div className="flex justify-between items-center text-xs sm:text-sm mb-1">
                               <span className={`${name===playerName ? 'font-bold' : ''} mr-1 whitespace-nowrap`}>{idx + 1}. {name}</span>
-                              <progress className="progress progress-error flex-grow mx-1" value={hp} max={playerMaxCastleHp}></progress>
+                              <div className="flex-grow mx-1 h-2 bg-base-content/20 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full bg-error transition-all duration-300 ease-out"
+                                  style={{ width: `${hpPercentage}%` }}
+                                ></div>
+                              </div>
                               <span className="ml-1">{hp}/{playerMaxCastleHp}</span>
                             </div>
                             {playerResources && (
