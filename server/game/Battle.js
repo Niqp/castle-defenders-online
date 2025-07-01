@@ -1,8 +1,36 @@
 // Battle.js - Handles battle mode between units on the grid
+import { UPGRADE_TYPES } from '../config.js';
 
 // Helper: choose a random element from an array (assuming length > 0)
 function randomElement(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Helper: calculate critical strike damage
+function calculateDamage(baseDamage, attacker, gameState) {
+  let finalDamage = baseDamage;
+  
+  // Apply critical strikes for player units
+  if (attacker.type === 'player' && attacker.owner && gameState?.players) {
+    const player = gameState.players.find(p => p.name === attacker.owner);
+    if (player?.upgrades?.CRITICAL_STRIKES) {
+      const critLevel = player.upgrades.CRITICAL_STRIKES;
+      const critChance = getUpgradeEffect(UPGRADE_TYPES.CRITICAL_STRIKES, critLevel, 'critChance', 0);
+      
+      if (Math.random() < critChance) {
+        finalDamage *= 2; // Critical hit deals double damage
+      }
+    }
+  }
+  
+  return finalDamage;
+}
+
+// Helper: get upgrade effect value
+function getUpgradeEffect(upgradeType, level, effectKey, defaultValue) {
+  if (level === 0) return defaultValue;
+  const levelData = upgradeType.levels.find(l => l.level === level);
+  return levelData?.effect[effectKey] ?? defaultValue;
 }
 
 // Assigns battles for units sharing a cell
@@ -32,7 +60,7 @@ function checkAndStartBattles(grid) {
 }
 
 // Processes battle logic: apply damage, switch targets, exit battle if no enemies remain
-function processBattles(grid) {
+function processBattles(grid, gameState = null) {
   for (let col = 1; col < grid.columns - 1; col++) {
     for (let row = 0; row < grid.rows; row++) {
       const units = grid.getUnitsInCell(row, col);
@@ -104,13 +132,15 @@ function processBattles(grid) {
       
       // Apply regular player attacks
       for (const { attacker, target } of playerAttacks) {
-        target.takeDamage(attacker.damage);
+        const damage = calculateDamage(attacker.damage, attacker, gameState);
+        target.takeDamage(damage);
       }
       
       // Apply player AoE attacks
       for (const { attacker, targets } of playerAoeAttacks) {
+        const damage = calculateDamage(attacker.damage, attacker, gameState);
         for (const target of targets) {
-          target.takeDamage(attacker.damage);
+          target.takeDamage(damage);
         }
       }
       

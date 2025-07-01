@@ -573,6 +573,21 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
     });
   };
 
+  // Calculate gold amount per mine click
+  const getMineGoldAmount = () => {
+    const miningLevel = upgrades.MINING_EFFICIENCY || 0;
+    return getUpgradeEffect(gameState?.upgradeTypes?.MINING_EFFICIENCY, miningLevel, 'mineGoldAmount', 1);
+  };
+
+  // Calculate food amount from mining (from Overcharge upgrade)
+  const getMiningFoodAmount = () => {
+    const overchargeLevel = upgrades.OVERCHARGE || 0;
+    if (overchargeLevel === 0) return 0;
+    const goldAmount = getMineGoldAmount();
+    const foodRatio = getUpgradeEffect(gameState?.upgradeTypes?.OVERCHARGE, overchargeLevel, 'miningFoodRatio', 0);
+    return Math.floor(goldAmount * foodRatio);
+  };
+
   return (
     <div data-theme="fantasy" className="min-h-dvh w-full flex flex-col bg-base-300 text-base-content relative">
       {/* Header Navbar - Redesigned for consistency and responsiveness */}
@@ -772,14 +787,24 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                     <h3 className="card-title text-md sm:text-lg">Mine Gold</h3>
                     <button 
                       className="btn btn-primary btn-sm sm:btn-md w-full mt-2 relative z-10" 
-                      onClick={() => { spawnGoldChips(1); handleMine(); }}
+                      onClick={() => { spawnGoldChips(getMineGoldAmount()); handleMine(); }}
                       ref={mineButtonRef}
                       disabled={!playerAlive}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm2 2a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm4 0a1 1 0 00-1 1v2a1 1 0 102 0V5a1 1 0 00-1-1zm-2 5a1 1 0 011 1v4a1 1 0 11-2 0v-4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                      Mine Gold
+                      Mine Gold 
+                      <span className="text-yellow-300 font-bold">
+                        (+{getMineGoldAmount()})
+                      </span>
+                      {getMiningFoodAmount() > 0 && (
+                        <span className="text-green-300 font-bold">
+                          (+{getMiningFoodAmount()}F)
+                        </span>
+                      )}
                     </button>
-                    <p className="text-xs text-base-content/70 mt-1 text-center">Click to manually gather gold.</p>
+                    <p className="text-xs text-base-content/70 mt-1 text-center">
+                      Click to manually gather {getMineGoldAmount()} gold{getMiningFoodAmount() > 0 ? ` and ${getMiningFoodAmount()} food` : ''}.
+                    </p>
                   </div>
                 </div>
 
@@ -880,8 +905,29 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                                 <div className="text-base-content/50 line-through text-xs">{unit.originalDmg}</div>
                               )}
                             </div>
-                                                    </div>
+                          </div>
                         </div>
+
+                        {/* Upgrade Effects Display */}
+                        {(() => {
+                          const critLevel = upgrades.CRITICAL_STRIKES || 0;
+                          if (critLevel > 0) {
+                            const critChance = getUpgradeEffect(gameState?.upgradeTypes?.CRITICAL_STRIKES, critLevel, 'critChance', 0);
+                            return (
+                              <div className="mt-2 p-2 bg-orange-500/10 border border-orange-500/20 rounded">
+                                <div className="flex items-center gap-1">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-orange-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="text-xs text-orange-400 font-medium">
+                                    Critical Strikes: {Math.round(critChance * 100)}% chance for 2x damage
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
 
                         {/* Auto-spawn controls */}
                         <div className="mt-3 p-2 bg-base-100 rounded border-l-4 border-accent">
@@ -949,7 +995,7 @@ export default function GameScreen({ playerName, gameState, socketRef }) {
                              {Array.from({ length: rows }).map((_, idx) => (
                                <button
                                  key={idx}
-                                 className={`btn btn-xs sm:btn-sm ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
+                                 className={`btn btn-sm sm:btn-md ${selectedCol === idx ? 'btn-primary' : 'btn-outline'}`}
                                  onClick={() => setSelectedCol(idx)}
                                  disabled={!playerAlive}
                                >{idx + 1}</button>

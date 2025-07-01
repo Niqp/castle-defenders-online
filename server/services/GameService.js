@@ -141,6 +141,16 @@ export class GameService {
     const goldAmount = this._getUpgradeEffect(UPGRADE_TYPES.MINING_EFFICIENCY, miningEfficiencyLevel, 'mineGoldAmount', 1);
     
     this._modifyResource(socket, 'gold', goldAmount);
+
+    // Handle Overcharge upgrade - gives food when mining
+    const overchargeLevel = player?.upgrades?.OVERCHARGE || 0;
+    if (overchargeLevel > 0) {
+      const foodRatio = this._getUpgradeEffect(UPGRADE_TYPES.OVERCHARGE, overchargeLevel, 'miningFoodRatio', 0);
+      const foodAmount = Math.floor(goldAmount * foodRatio);
+      if (foodAmount > 0) {
+        this._modifyResource(socket, 'food', foodAmount);
+      }
+    }
   }
 
   hireWorker(socket, type) {

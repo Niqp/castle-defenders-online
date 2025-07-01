@@ -50,7 +50,7 @@ export class CombatTicker {
         */
         setTimeout(() => {
           try {
-            Battle.processBattles(this.gameState.grid);
+            Battle.processBattles(this.gameState.grid, this.gameState);
 
             // Remove dead units
             for (const unit of Array.from(this.gameState.units.values())) {
