@@ -3,21 +3,21 @@ export const CORS_ORIGIN = '*';
 
 export const TIMINGS = {
   WORKER_INTERVAL: 1000,
-  WAVE_INTERVAL: 10000,
+  WAVE_INTERVAL: 60000,
   COUNTDOWN_INTERVAL: 1000,
 };
 
 // Grid configuration
 export const GRID_CONFIG = {
-  DEFAULT_COLUMNS: 12, // Distance from castle to portal
-  MIN_ROWS: 7, // Minimum lanes (scales up with player count)
+  DEFAULT_COLUMNS: 10, // Distance from castle to portal
+  MIN_ROWS: 1, // Minimum lanes (scales up with player count)
 };
 
 // Wave spawning and enemy progression
 export const WAVE_CONFIG = {
   BASE_ENEMIES_PER_WAVE: 3, // Base number of enemies per wave
   ENEMIES_PER_PLAYER_SCALING: 0.5, // Additional enemies per wave per 2 active players (0.5 = 1 enemy per 2 players)
-  LAST_SCALING_WAVE: 10, // Wave number where enemy type progression completes (100% last enemy type)
+  LAST_SCALING_WAVE: 100, // Wave number where enemy type progression completes (100% last enemy type)
   FALLBACK_ENEMY: { 
     baseHealth: 10, 
     baseDamage: 2 
