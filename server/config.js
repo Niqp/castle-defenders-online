@@ -27,7 +27,6 @@ export const WAVE_CONFIG = {
 // Game balance parameters
 export const GAME_BALANCE = {
   INITIAL_CASTLE_HP: 1000, // Starting castle health
-  DEFAULT_CASTLE_DAMAGE: 10, // Damage when enemy reaches castle
 };
 
 export const WORKER_TYPES = {
