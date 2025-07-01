@@ -162,6 +162,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
   const UnitSprite = React.memo(function UnitSprite({ unitId }) {
     const containerRef = useRef();           // Main container for this unit
     const hpBarRef = useRef();               // Graphics for HP bar
+    const spriteRef = useRef();              // Reference to the sprite for mirroring
 
     // Render static children once. Positions will be mutated imperatively.
     const meta = metaRef.current.get(unitId);
@@ -207,6 +208,21 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
 
       const interpX = prev.x + (target.x - prev.x) * localT;
       const interpY = prev.y + (target.y - prev.y) * localT;
+
+      // Simple sprite mirroring based on unit type
+      // Player units face right, enemy units face left
+      if (spriteRef.current) {
+        const unitMeta = metaRef.current.get(unitId);
+        const isPlayer = unitMeta?.type === 'player';
+        
+        if (isPlayer) {
+          // Player units face right (mirrored)
+          spriteRef.current.scale.x = -spriteScale;
+        } else {
+          // Enemy units face left (default orientation)
+          spriteRef.current.scale.x = spriteScale;
+        }
+      }
 
       // Battle offset (re-use original logic)
       let battleOffsetX = 0;
@@ -292,7 +308,7 @@ export default function PixiStage({ grid = [], resizeTarget = window }) {
 
     return (
       <pixiContainer ref={containerRef}>
-        <pixiSprite texture={texture} anchor={0.5} scale={spriteScale} />
+        <pixiSprite ref={spriteRef} texture={texture} anchor={0.5} scale={spriteScale} />
         <pixiGraphics ref={hpBarRef} draw={(g) => drawHpBar(g, 1)} />
       </pixiContainer>
     );

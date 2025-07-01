@@ -24,12 +24,38 @@ export class GameService {
   endGame() {
     // Minimal implementation for test compatibility
   }
-  constructor(io, roomId) {
+  cleanup() {
+    // Stop all game tickers
+    this._clearIntervals();
+    
+    // Clear game state
+    this.gameState = null;
+    
+    // Clear lobby state
+    this.lobby = { players: [], ready: new Map() };
+    
+    // Clear socket mappings
+    this.socketToName.clear();
+    
+    console.log(`Game cleanup completed for room ${this.roomId}`);
+  }
+
+  triggerRoomCleanup() {
+    // First cleanup the game service itself
+    this.cleanup();
+    
+    // Then notify the room manager to remove this room and clear client registry
+    if (this.onCleanupCallback) {
+      this.onCleanupCallback(this.roomId);
+    }
+  }
+  constructor(io, roomId, onCleanupCallback = null) {
     this.io = io;
     this.roomId = roomId;
     this.lobby = { players: [], ready: new Map() };
     this.gameState = null;
     this.socketToName = new Map();
+    this.onCleanupCallback = onCleanupCallback;
   }
 
   join(socket, name) {
@@ -177,7 +203,7 @@ export class GameService {
       this.gameState.nextWaveIn = Math.floor(TIMINGS.WAVE_INTERVAL / 1000);
       this.io.in(this.roomId).emit(EVENTS.STATE_UPDATE, { nextWaveIn: this.gameState.nextWaveIn });
     });
-    this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState);
+    this.combatTicker = new CombatTicker(this.io, this.roomId, this.gameState, this);
     this.resourceTicker.start();
     this.countdownTicker.start();
     this.combatTicker.start();

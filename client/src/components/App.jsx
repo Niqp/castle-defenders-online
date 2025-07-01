@@ -71,14 +71,29 @@ export default function App() {
       navigate('/game');
     };
 
-    // TODO: Add listener for game end to navigate to /end and setEndStats
-    // Example: socket.on(EVENTS.GAME_END, (stats) => { setEndStats(stats); navigate('/end'); });
+    const handleGameOver = (gameOverData) => {
+      console.log('Game over received:', gameOverData);
+      // Format statistics for the end screen
+      const formattedStats = {
+        victory: gameOverData.stats?.victory || false,
+        waves: gameOverData.stats?.waves || 1,
+        gold: gameOverData.stats?.playerStats?.[playerName]?.gold || 0,
+        units: gameOverData.stats?.playerStats?.[playerName]?.totalUnitsHired || 0,
+        dps: 0, // TODO: Calculate DPS contribution if available
+        message: gameOverData.message,
+        playerStats: gameOverData.stats?.playerStats || {}
+      };
+      
+      setEndStats(formattedStats);
+      navigate('/end');
+    };
 
     socket.on(EVENTS.SHOW_WELCOME, handleShowWelcome);
     socket.on(EVENTS.RESTORE_LOBBY, handleRestoreLobby);
     socket.on(EVENTS.RESTORE_GAME, handleRestoreGame);
     socket.on(EVENTS.LOBBY_UPDATE, handleLobbyUpdate);
     socket.on(EVENTS.GAME_START, handleGameStart);
+    socket.on(EVENTS.GAME_OVER, handleGameOver);
 
     return () => {
       socket.off(EVENTS.SHOW_WELCOME, handleShowWelcome);
@@ -86,7 +101,7 @@ export default function App() {
       socket.off(EVENTS.RESTORE_GAME, handleRestoreGame);
       socket.off(EVENTS.LOBBY_UPDATE, handleLobbyUpdate);
       socket.off(EVENTS.GAME_START, handleGameStart);
-      // TODO: socket.off(EVENTS.GAME_END, ...);
+      socket.off(EVENTS.GAME_OVER, handleGameOver);
     };
   }, [playerName, navigate]); // Added playerName and navigate to dependency array
 
@@ -118,13 +133,28 @@ export default function App() {
   }
 
   function handleRestart() {
-    // Reset relevant states if needed, e.g., playerName, lobby, gameState
-    // setPlayerName(''); // Example: uncomment if player needs to re-enter name
-    // setLobby({ players: [], ready: {} });
-    // setGameState(null);
-    // setEndStats(null);
-    // setReady(false);
+    // Clear all local storage to ensure fresh start
+    const STORAGE_KEY = 'clientId';
+    localStorage.removeItem(STORAGE_KEY);
+    
+    // Reset all relevant states
+    setPlayerName('');
+    setLobby({ players: [], ready: {} });
+    setGameState(null);
+    setEndStats(null);
+    setReady(false);
+    setCurrentRoomId('');
+    
+    // Disconnect the current socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    
     navigate('/');
+    
+    // Force a page reload to ensure complete state reset
+    window.location.reload();
   }
 
   // This div can be styled to provide the common background

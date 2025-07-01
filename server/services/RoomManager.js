@@ -20,8 +20,24 @@ export class RoomManager {
 
   createRoom(roomId) {
     if (this.rooms.has(roomId)) return;
-    const service = new GameService(this.io, roomId);
+    
+    // Create cleanup callback that will be called when game ends
+    const cleanupCallback = (roomIdToCleanup) => {
+      this.handleRoomCleanup(roomIdToCleanup);
+    };
+    
+    const service = new GameService(this.io, roomId, cleanupCallback);
     this.rooms.set(roomId, service);
+  }
+
+  handleRoomCleanup(roomId) {
+    console.log(`Handling room cleanup for: ${roomId}`);
+    
+    // Remove the room
+    this.removeRoom(roomId);
+    
+    // Emit cleanup event so the main server can clear client registry
+    this.io.emit('__room_cleanup', { roomId });
   }
 
   listRooms(socket) {

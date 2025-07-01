@@ -20,6 +20,19 @@ app.use(express.json());
 const roomManager = new RoomManager(io);
 const clientRegistry = new ClientRegistry();
 
+// Handle room cleanup events
+io.on('__room_cleanup', (data) => {
+  const { roomId } = data;
+  console.log(`Clearing client registry for room: ${roomId}`);
+  
+  // Clear client registry entries for all players in this room
+  for (const [clientId, record] of clientRegistry.clients.entries()) {
+    if (record.roomId === roomId) {
+      clientRegistry.set(clientId, {}); // Clear the record but keep the clientId
+    }
+  }
+});
+
 // Socket event routing
 io.on(EVENTS.CONNECTION, socket => {
   // ------------------------------

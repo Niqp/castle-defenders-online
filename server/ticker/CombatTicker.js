@@ -4,10 +4,11 @@ import * as Movement from '../game/Movement.js';
 import * as Battle from '../game/Battle.js';
 
 export class CombatTicker {
-  constructor(io, roomId, gameState) {
+  constructor(io, roomId, gameState, gameService = null) {
     this.io = io;
     this.roomId = roomId;
     this.gameState = gameState;
+    this.gameService = gameService;
     this.intervalId = null;
   }
 
@@ -64,7 +65,18 @@ export class CombatTicker {
 
             // Game-over check (after damage)
             if (!this.gameState.areAnyCastlesAlive()) {
-              this.io.in(this.roomId).emit(EVENTS.GAME_OVER, { message: 'All castles have fallen!', stats: { wave: this.gameState.wave } });
+              // Calculate game statistics
+              const gameStats = this._calculateGameStats();
+              
+              this.io.in(this.roomId).emit(EVENTS.GAME_OVER, { 
+                message: 'All castles have fallen!', 
+                stats: gameStats,
+                roomId: this.roomId
+              });
+              
+              // Trigger game service cleanup
+              this._triggerGameCleanup();
+              
               this.stop();
             }
           } catch (err) {
@@ -83,5 +95,44 @@ export class CombatTicker {
 
   stop() {
     clearInterval(this.intervalId);
+  }
+
+  _calculateGameStats() {
+    // Calculate comprehensive game statistics
+    const stats = {
+      waves: this.gameState.wave || 1,
+      totalPlayers: this.gameState.playerNames.length,
+      gameEndTime: new Date().toISOString(),
+      victory: false, // All players dead = defeat
+    };
+
+    // Calculate per-player statistics
+    const playerStats = {};
+    if (this.gameState.players) {
+      this.gameState.players.forEach(player => {
+        const totalUnitsHired = Object.values(player.units || {}).reduce((sum, count) => sum + count, 0);
+        const totalWorkersHired = Object.values(player.workers || {}).reduce((sum, count) => sum + count, 0);
+        
+        playerStats[player.name] = {
+          gold: Math.floor(player.gold || 0),
+          food: Math.floor(player.food || 0),
+          iron: Math.floor(player.iron || 0),
+          jewels: Math.floor(player.jewels || 0),
+          totalUnitsHired,
+          totalWorkersHired,
+          castleHpLeft: this.gameState.castleHealth[player.name] || 0
+        };
+      });
+    }
+
+    stats.playerStats = playerStats;
+    return stats;
+  }
+
+  _triggerGameCleanup() {
+    // Trigger cleanup through the game service
+    if (this.gameService && typeof this.gameService.triggerRoomCleanup === 'function') {
+      this.gameService.triggerRoomCleanup();
+    }
   }
 }
